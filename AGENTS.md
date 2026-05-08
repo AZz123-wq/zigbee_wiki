@@ -23,6 +23,7 @@ my_wiki/
 │   ├── concepts/               # 概念页（Binding、Reporting、Commissioning 等）
 │   ├── comparisons/            # 对比分析（R22 vs R23 等）
 │   └── syntheses/              # 综合判断（跨文档模式总结）
+├── outputs/                    # 产出（报告、演示等）
 └── .git/
 ```
 
@@ -180,3 +181,39 @@ updated: 2026-05-01
 4. **控制页面粒度**：实体页聚焦一个 Cluster/Device/概念，避免过长
 5. **标签系统**：使用 tags 实现横向检索（`cluster`, `commissioning`, `security`, `bdb` 等）
 6. **版本意识**：多处引用时提到版本号，避免混淆 R22/R23/Revision 7/8 等
+
+---
+
+## 七、Skill 命令（Slash Commands）
+
+以下命令可通过 `/命令名` 触发，对应的 Skill 文件定义了详细执行步骤。
+Skill 是 AGENTS.md 的**执行手册**：AGENTS.md 定义"做什么"（Schema），Skill 定义"怎么做"（步骤）。
+
+### /wiki-ingest — 摄入新资料
+- **文件**: `~/.claude/commands/wiki-ingest.md` (全局 Slash Command)
+- **何时用**: 将 raw/ 下的新文件编译为 wiki 页面
+- **自动触发**: 当大于 5MB 或 >30 页的 PDF 时，自动转入 `/wiki-pdf-read`
+
+### /wiki-pdf-read — 长 PDF 低上下文读取
+- **文件**: `~/.claude/commands/wiki-pdf-read.md` (全局)
+- **何时用**: 处理 >5MB 或 >30 页的 PDF，或被 `/wiki-ingest` 自动调用
+- **强制流程**: Phase 0(预检查) → Phase 1(结构扫描) → Phase 2(关键词定位) → Phase 3(分段深读≤5p/次) → Phase 4(Wiki 写入) → Phase 5(自检)
+- **核心原则**: 永远不把整本 PDF 装入上下文
+
+### /wiki-lint — 健康检查
+- **文件**: `~/.claude/commands/wiki-lint.md` (全局)
+- **何时用**: 每摄入 5-10 份资料后，或用户主动触发
+- **检测项**: 矛盾检测、过时检测、孤儿页面、缺失引用、格式一致性
+
+### /wiki-stats — 统计报告
+- **文件**: `~/.claude/commands/wiki-stats.md` (全局)
+- **何时用**: 了解知识库健康度
+- **输出**: 源文件统计、Wiki 页面统计、标签统计、链接统计、时间线
+
+### PDF 提取工具
+- **脚本**: `/root/pdf_extract.py`
+- **模式**:
+  - `python3 pdf_extract.py <file.pdf> [start] [end]` — 提取指定页
+  - `python3 pdf_extract.py check <file.pdf>` — 预检查（可提取性 + 置信度）
+  - `python3 pdf_extract.py scan <file.pdf> [keywords]` — 扫描 TOC + 关键词命中
+  - `python3 pdf_extract.py diff <f1> <f2> [keywords]` — 两个 PDF 的关键词差异对比

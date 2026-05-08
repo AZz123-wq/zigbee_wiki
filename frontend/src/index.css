@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Chat input area */
+.chat-input-area {
+  border-top: 1px solid #2a2a2a;
+}
+
+/* Message bubble animations */
+.message-enter {
+  opacity: 0;
+  transform: translateY(10px);
+  animation: messageIn 0.2s ease-out forwards;
+}
+
+@keyframes messageIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Context menu */
+.context-menu {
+  animation: contextIn 0.1s ease-out;
+}
+
+@keyframes contextIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Drawer panel */
+.drawer-enter {
+  animation: drawerIn 0.2s ease-out;
+}
+
+@keyframes drawerIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Dropzone */
+.dropzone-active {
+  border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.1);
+}
+
+/* Timeline stepper */
+.timeline-step::before {
+  content: '';
+  position: absolute;
+  left: 11px;
+  top: 28px;
+  bottom: -4px;
+  width: 2px;
+  background: #404040;
+}
+.timeline-step:last-child::before {
+  display: none;
+}
+
+/* PDF viewer resize handle */
+.pdf-resize-handle {
+  cursor: col-resize;
+  width: 4px;
+  background: #333;
+  transition: background 0.2s;
+}
+.pdf-resize-handle:hover {
+  background: #555;
+}

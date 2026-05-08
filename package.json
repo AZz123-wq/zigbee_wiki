@@ -1,0 +1,18 @@
+{
+  "name": "wiki-chat-workbench",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local Wiki Chat Workbench — ChatGPT-style frontend for your personal knowledge wiki",
+  "scripts": {
+    "index": "npx tsx scripts/build-wiki-index.ts && npx tsx scripts/build-source-index.ts",
+    "check": "npx tsx scripts/check-wiki-health.ts",
+    "dev:server": "cd server && npx tsx src/index.ts",
+    "dev:frontend": "cd frontend && npx vite --host 0.0.0.0",
+    "dev": "echo 'Run in two terminals:' && echo '  npm run dev:server' && echo '  npm run dev:frontend'",
+    "reindex": "npm run index && npm run check"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
