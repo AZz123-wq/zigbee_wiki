@@ -9,6 +9,7 @@ interface ChatStreamHandlers {
   onConversation?: (payload: any) => void;
   onUserMessage?: (message: any) => void;
   onAssistantMessage?: (message: any) => void;
+  onStatus?: (payload: { phase?: string; message?: string }) => void;
 }
 
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
@@ -92,6 +93,10 @@ export async function sendChatStream(
     }
     if (event === 'user_msg') {
       handlers.onUserMessage?.(parsed);
+      return;
+    }
+    if (event === 'status') {
+      handlers.onStatus?.(parsed);
       return;
     }
     if (event === 'token') {

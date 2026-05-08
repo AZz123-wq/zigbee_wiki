@@ -28,6 +28,7 @@ export interface ChatResponse {
 
 export interface ChatStreamParams extends ChatParams {
   onToken: (token: string) => void;
+  onThinking?: () => void;
 }
 
 function extractChoiceText(choice: any): string {
@@ -252,6 +253,7 @@ export function chatStream(params: ChatStreamParams): Promise<ChatResponse> {
         const reasoning = extractChoiceReasoning(choice);
         if (reasoning) {
           reasoningContent += reasoning;
+          params.onThinking?.();
         }
         if (token) {
           content += token;
@@ -309,6 +311,7 @@ export function chatStream(params: ChatStreamParams): Promise<ChatResponse> {
           const reasoning = extractChoiceReasoning(choice);
           if (reasoning) {
             reasoningContent = reasoning;
+            params.onThinking?.();
           }
           if (choice?.finish_reason) {
             finishReason = choice.finish_reason;
@@ -425,6 +428,7 @@ function chatAnthropicStream(
             params.onToken(delta.text);
           } else if (delta.type === 'thinking_delta' && delta.thinking) {
             reasoningContent += delta.thinking;
+            params.onThinking?.();
           }
         }
       } catch {

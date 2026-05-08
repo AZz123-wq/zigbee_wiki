@@ -79,6 +79,7 @@ export default function ChatInput() {
     // Create a placeholder assistant message for streaming tokens
     const assistantMsgId = `streaming-${Date.now()}`;
     let finalAssistantMsgId = assistantMsgId;
+    let assistantStarted = false;
     const streamingMsg = {
       id: assistantMsgId,
       conversation_id: currentConversationId,
@@ -98,10 +99,12 @@ export default function ChatInput() {
           pdf_pages: selectedPdfPages,
         },
         (token) => {
-          // Append token to the streaming message in real-time
+          const nextContent = (current: string) =>
+            assistantStarted ? current + token : token;
+          assistantStarted = true;
           useStore.setState((s) => ({
             messages: s.messages.map((m) =>
-              m.id === finalAssistantMsgId ? { ...m, content: m.content + token } : m
+              m.id === finalAssistantMsgId ? { ...m, content: nextContent(m.content) } : m
             ),
           }));
         },
@@ -133,6 +136,16 @@ export default function ChatInput() {
               messages: s.messages.map((m) =>
                 m.id === userMsg.id || m.id === finalAssistantMsgId
                   ? { ...m, conversation_id: currentConversationId }
+                  : m
+              ),
+            }));
+          },
+          onStatus: (payload) => {
+            if (assistantStarted) return;
+            useStore.setState((s) => ({
+              messages: s.messages.map((m) =>
+                m.id === finalAssistantMsgId
+                  ? { ...m, content: payload.message || '正在思考...' }
                   : m
               ),
             }));

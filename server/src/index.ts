@@ -469,6 +469,12 @@ app.post('/api/chat/stream', async (req, res) => {
     const sendSSE = (event: string, data: any) => {
       res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
+    let sentThinkingStatus = false;
+    const sendThinkingStatus = () => {
+      if (sentThinkingStatus || res.writableEnded) return;
+      sentThinkingStatus = true;
+      sendSSE('status', { phase: 'thinking', message: '正在思考...' });
+    };
 
     let convId = conversation_id;
     let createdConversation: Record<string, unknown> | null = null;
@@ -512,6 +518,7 @@ app.post('/api/chat/stream', async (req, res) => {
 
     sendSSE('conv_id', { conversation_id: convId, conversation: createdConversation });
     sendSSE('user_msg', userMsg);
+    sendThinkingStatus();
 
     // Load context (same as regular chat)
     const wikiIndex = getWikiIndex();
@@ -565,6 +572,7 @@ app.post('/api/chat/stream', async (req, res) => {
             sendSSE('token', { content });
           }
         },
+        onThinking: sendThinkingStatus,
       });
 
       fullContent = response.content || fullContent;
