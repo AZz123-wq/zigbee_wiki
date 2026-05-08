@@ -8,10 +8,11 @@ import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import * as fs from 'fs';
+import { execSync } from 'child_process';
 
 import { conversationStore, archiveStore, reviewStore, messageStore, getWikiIndex, getSourceIndex, getCheckResult } from './dataStore.js';
 import { getPdfInfo, readPdfPages, detectPdfRisk } from './pdfSafeReader.js';
-import { chat, buildSystemPrompt } from './llmClient.js';
+import { chat, chatStream, buildSystemPrompt } from './llmClient.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -225,6 +226,7 @@ app.post('/api/chat', async (req, res) => {
 
     const previousMessages = messageStore.read().messages
       .filter((m: any) => m.conversation_id === convId)
+      .filter((m: any) => m.id !== userMsg.id)
       .slice(-10) // last 10 messages for context
       .map((m: any) => ({ role: m.role, content: m.content }));
 
@@ -469,6 +471,7 @@ app.post('/api/chat/stream', async (req, res) => {
     };
 
     let convId = conversation_id;
+    let createdConversation: Record<string, unknown> | null = null;
     if (!convId) {
       const conv = {
         id: uuidv4(),
@@ -491,6 +494,7 @@ app.post('/api/chat/stream', async (req, res) => {
         return d;
       });
       convId = conv.id;
+      createdConversation = conv;
     }
 
     // Save user message
@@ -506,7 +510,7 @@ app.post('/api/chat/stream', async (req, res) => {
       return d;
     });
 
-    sendSSE('conv_id', { conversation_id: convId });
+    sendSSE('conv_id', { conversation_id: convId, conversation: createdConversation });
     sendSSE('user_msg', userMsg);
 
     // Load context (same as regular chat)
@@ -538,6 +542,7 @@ app.post('/api/chat/stream', async (req, res) => {
 
     const previousMessages = messageStore.read().messages
       .filter((m: any) => m.conversation_id === convId)
+      .filter((m: any) => m.id !== userMsg.id)
       .slice(-10)
       .map((m: any) => ({ role: m.role, content: m.content }));
 
@@ -547,20 +552,24 @@ app.post('/api/chat/stream', async (req, res) => {
       { role: 'user' as const, content: message },
     ];
 
-    // Call LLM - send full response as SSE tokens
+    // Call LLM and forward real streaming tokens.
     try {
-      const response = await chat({
+      let fullContent = '';
+      const response = await chatStream({
         messages: chatMessages,
         temperature: 0.7,
         max_tokens: 4096,
+        onToken: (content) => {
+          fullContent += content;
+          if (!res.writableEnded) {
+            sendSSE('token', { content });
+          }
+        },
       });
 
-      const fullContent = response.content;
-
-      // Send in chunks of ~10 chars to simulate streaming
-      for (let i = 0; i < fullContent.length; i += 10) {
-        if (res.writableEnded) break;
-        sendSSE('token', { content: fullContent.slice(i, i + 10) });
+      fullContent = response.content || fullContent;
+      if (!fullContent.trim()) {
+        throw new Error(`模型返回了空内容，未保存 assistant 消息。model=${response.model}`);
       }
 
       const assistantMsg = {
@@ -585,15 +594,34 @@ app.post('/api/chat/stream', async (req, res) => {
       conversationStore.update((d) => {
         const idx = d.conversations.findIndex((c: any) => c.id === convId);
         if (idx >= 0) {
-          d.conversations[idx].updated_at = new Date().toISOString();
-          d.conversations[idx].message_count += 2;
+          const c = d.conversations[idx] as Record<string, any>;
+          c.updated_at = new Date().toISOString();
+          c.message_count = Number(c.message_count ?? 0) + 2;
+          c.last_summary = message.slice(0, 100);
+          c.has_raw = c.has_raw || raw_files.length > 0;
+          c.has_pdf = c.has_pdf || pdf_pages.length > 0;
+          c.related_raw_files = raw_files || c.related_raw_files || [];
+          c.related_wiki_pages = wiki_pages || c.related_wiki_pages || [];
+          c.related_pdf_pages = pdf_pages || c.related_pdf_pages || [];
+          d.conversations[idx] = c;
         }
         return d;
       });
 
-      sendSSE('done', { message_id: assistantMsg.id, full_content: fullContent });
+      sendSSE('done', { message: assistantMsg, message_id: assistantMsg.id, full_content: fullContent });
       res.end();
     } catch (err: any) {
+      conversationStore.update((d) => {
+        const idx = d.conversations.findIndex((c: any) => c.id === convId);
+        if (idx >= 0) {
+          const c = d.conversations[idx] as Record<string, any>;
+          c.updated_at = new Date().toISOString();
+          c.message_count = Number(c.message_count ?? 0) + 1;
+          c.last_summary = message.slice(0, 100);
+          d.conversations[idx] = c;
+        }
+        return d;
+      });
       sendSSE('error', { message: err.message || String(err) });
       res.end();
     }
@@ -695,7 +723,7 @@ app.post('/api/raw/upload', upload.single('file'), (req, res) => {
     linked_wiki_pages: [],
     related_conversations: [],
     summary: '',
-    risk_level: 'low' as const,
+    risk_level: 'low' as 'low' | 'medium' | 'high',
   };
 
   // Run pdfinfo if it's a PDF
@@ -809,7 +837,6 @@ app.get('/api/pdf/:id/file', (req, res) => {
 // ============================================================
 app.post('/api/check', (_req, res) => {
   try {
-    const { execSync } = require('child_process');
     const scriptsDir = path.resolve(import.meta.dirname, '..', '..', 'scripts');
     execSync(
       `npx tsx ${path.join(scriptsDir, 'check-wiki-health.ts')}`,

@@ -22,6 +22,8 @@ export default function ChatInput() {
     selectedRawFiles,
     selectedPdfPages,
     addMessage,
+    addConversation,
+    setActiveConversation,
     setLoading,
     clearContext,
     loading,
@@ -38,6 +40,7 @@ export default function ChatInput() {
   const handleSend = async () => {
     const text = input.trim();
     if (!text && uploadedFiles.length === 0) return;
+    const messageText = text || '上传了文件';
 
     // Upload files first if any
     let rawFileIds: string[] = [...uploadedFileIds];
@@ -62,11 +65,12 @@ export default function ChatInput() {
     abortRef.current = abort;
 
     setLoading(true);
+    let currentConversationId = activeConversationId || '';
     const userMsg = {
       id: `temp-${Date.now()}`,
-      conversation_id: activeConversationId || '',
+      conversation_id: currentConversationId,
       role: 'user' as const,
-      content: text || '上传了文件',
+      content: messageText,
       created_at: new Date().toISOString(),
     };
     addMessage(userMsg);
@@ -74,9 +78,10 @@ export default function ChatInput() {
 
     // Create a placeholder assistant message for streaming tokens
     const assistantMsgId = `streaming-${Date.now()}`;
+    let finalAssistantMsgId = assistantMsgId;
     const streamingMsg = {
       id: assistantMsgId,
-      conversation_id: activeConversationId || '',
+      conversation_id: currentConversationId,
       role: 'assistant' as const,
       content: '',
       created_at: new Date().toISOString(),
@@ -87,7 +92,7 @@ export default function ChatInput() {
       await sendChatStream(
         {
           conversation_id: activeConversationId,
-          message: text,
+          message: messageText,
           wiki_pages: selectedWikiPages,
           raw_files: [...selectedRawFiles, ...rawFileIds],
           pdf_pages: selectedPdfPages,
@@ -96,17 +101,61 @@ export default function ChatInput() {
           // Append token to the streaming message in real-time
           useStore.setState((s) => ({
             messages: s.messages.map((m) =>
-              m.id === assistantMsgId ? { ...m, content: m.content + token } : m
+              m.id === finalAssistantMsgId ? { ...m, content: m.content + token } : m
             ),
           }));
         },
-        () => {
-          // Streaming done - content already accumulated
+        (fullContent) => {
+          if (!fullContent) return;
+          useStore.setState((s) => ({
+            messages: s.messages.map((m) =>
+              m.id === finalAssistantMsgId ? { ...m, content: fullContent } : m
+            ),
+          }));
         },
         (errMsg) => {
-          throw new Error(errMsg);
+          console.error('Stream error:', errMsg);
         },
-        abort.signal
+        abort.signal,
+        {
+          onConversation: (payload) => {
+            currentConversationId = payload.conversation_id || currentConversationId;
+            if (payload.conversation) {
+              const exists = useStore
+                .getState()
+                .conversations.some((c) => c.id === payload.conversation.id);
+              if (!exists) addConversation(payload.conversation);
+            } else if (currentConversationId) {
+              setActiveConversation(currentConversationId);
+            }
+
+            useStore.setState((s) => ({
+              messages: s.messages.map((m) =>
+                m.id === userMsg.id || m.id === finalAssistantMsgId
+                  ? { ...m, conversation_id: currentConversationId }
+                  : m
+              ),
+            }));
+          },
+          onUserMessage: (serverUserMsg) => {
+            currentConversationId = serverUserMsg.conversation_id || currentConversationId;
+            useStore.setState((s) => ({
+              messages: s.messages.map((m) =>
+                m.id === userMsg.id ? serverUserMsg : m
+              ),
+            }));
+          },
+          onAssistantMessage: (serverAssistantMsg) => {
+            finalAssistantMsgId = serverAssistantMsg.id || finalAssistantMsgId;
+            useStore.setState((s) => ({
+              messages: s.messages.map((m) =>
+                m.id === assistantMsgId || m.id === finalAssistantMsgId
+                  ? serverAssistantMsg
+                  : m
+              ),
+            }));
+          },
+        }
       );
 
       setUploadedFiles([]);
@@ -122,7 +171,7 @@ export default function ChatInput() {
       // Show error in the streaming message
       useStore.setState((s) => ({
         messages: s.messages.map((m) =>
-          m.id === assistantMsgId
+          m.id === assistantMsgId || m.id === finalAssistantMsgId
             ? { ...m, role: 'system' as const, content: `错误: ${err.message}。请确认后端服务器已启动且 DEEPSEEK_API_KEY 已配置。` }
             : m
         ),

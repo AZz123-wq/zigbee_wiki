@@ -5,6 +5,12 @@
 
 const BASE = '/api';
 
+interface ChatStreamHandlers {
+  onConversation?: (payload: any) => void;
+  onUserMessage?: (message: any) => void;
+  onAssistantMessage?: (message: any) => void;
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${url}`, {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
@@ -38,7 +44,8 @@ export async function sendChatStream(
   onToken: (token: string) => void,
   onDone: (fullContent: string) => void,
   onError: (err: string) => void,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  handlers: ChatStreamHandlers = {}
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/stream`, {
     method: 'POST',
@@ -58,31 +65,66 @@ export async function sendChatStream(
   const decoder = new TextDecoder();
   let buffer = '';
 
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+  const handleEventBlock = (block: string) => {
+    const lines = block.split(/\r?\n/);
+    let event = 'message';
+    const dataLines: string[] = [];
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('event: ')) continue;
-        if (!line.startsWith('data: ')) continue;
-
-        try {
-          const parsed = JSON.parse(line.slice(6));
-          if (parsed.content) onToken(parsed.content);
-          if (parsed.full_content) onDone(parsed.full_content);
-          if (parsed.message) onError(parsed.message);
-        } catch {}
+    for (const line of lines) {
+      if (line.startsWith('event:')) {
+        event = line.slice(6).trim();
+      } else if (line.startsWith('data:')) {
+        dataLines.push(line.slice(5).trimStart());
       }
     }
-  } catch (err: any) {
-    if (err.name !== 'AbortError') {
-      onError(err.message);
+
+    if (dataLines.length === 0) return;
+    let parsed: any;
+    try {
+      parsed = JSON.parse(dataLines.join('\n'));
+    } catch {
+      return;
     }
+
+    if (event === 'conv_id') {
+      handlers.onConversation?.(parsed);
+      return;
+    }
+    if (event === 'user_msg') {
+      handlers.onUserMessage?.(parsed);
+      return;
+    }
+    if (event === 'token') {
+      if (parsed.content) onToken(parsed.content);
+      return;
+    }
+    if (event === 'done') {
+      if (parsed.message) handlers.onAssistantMessage?.(parsed.message);
+      onDone(parsed.full_content || parsed.message?.content || '');
+      return;
+    }
+    if (event === 'error') {
+      const message = parsed.message || 'Stream failed';
+      onError(message);
+      throw new Error(message);
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || '';
+
+    for (const block of blocks) {
+      if (block.trim()) handleEventBlock(block);
+    }
+  }
+
+  if (buffer.trim()) {
+    handleEventBlock(buffer);
   }
 }
 

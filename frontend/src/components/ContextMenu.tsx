@@ -121,7 +121,10 @@ export default function ContextMenu({ x, y, convId, onClose, onDelete, onRename 
     {
       icon: Trash2,
       label: '删除',
-      action: () => onDelete(convId),
+      action: () => {
+        onClose();
+        onDelete(convId);
+      },
       danger: true,
     },
   ];

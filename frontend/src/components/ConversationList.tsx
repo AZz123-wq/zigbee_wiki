@@ -77,9 +77,32 @@ export default function ConversationList() {
   );
 
   const handleDelete = async (convId: string) => {
+    setContextMenu(null);
     try {
       await deleteConversation(convId);
       removeConversation(convId);
+
+      if (convId === activeConversationId) {
+        const remaining = useStore.getState().conversations;
+        if (remaining.length > 0) {
+          const nextId = remaining[0].id;
+          const requestId = ++pendingRequestRef.current;
+          setActiveConversation(nextId);
+          setLoadingConvId(nextId);
+          try {
+            const conv = await getConversation(nextId);
+            if (requestId === pendingRequestRef.current) {
+              setMessages(conv.messages || []);
+            }
+          } catch {
+            if (requestId === pendingRequestRef.current) setMessages([]);
+          } finally {
+            if (requestId === pendingRequestRef.current) setLoadingConvId(null);
+          }
+        } else {
+          setMessages([]);
+        }
+      }
     } catch (err) {
       console.error('Delete failed:', err);
     }
