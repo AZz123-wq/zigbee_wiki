@@ -19,13 +19,14 @@ import { buildChatContext, maybeSaveEvidencePack, saveResearchRun, type Citation
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const ROOT_DIR = path.resolve(MODULE_DIR, '..', '..', '..');
 
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
 // File upload config
-const RAW_DIR = path.resolve(MODULE_DIR, '..', '..', 'raw');
+const RAW_DIR = path.join(ROOT_DIR, 'knowledge', 'raw');
 const INBOX_DIR = path.join(RAW_DIR, 'inbox');
 fs.mkdirSync(INBOX_DIR, { recursive: true });
 
@@ -1068,10 +1069,10 @@ app.get('/api/pdf/:id/file', (req, res) => {
 // ============================================================
 app.post('/api/check', (_req, res) => {
   try {
-    const scriptsDir = path.resolve(MODULE_DIR, '..', '..', 'scripts');
+    const scriptsDir = path.join(ROOT_DIR, 'tools', 'scripts');
     execSync(
       `npx tsx ${path.join(scriptsDir, 'check-wiki-health.ts')}`,
-      { encoding: 'utf-8', timeout: 30000, cwd: path.resolve(MODULE_DIR, '..', '..') }
+      { encoding: 'utf-8', timeout: 30000, cwd: ROOT_DIR }
     );
     const result = getCheckResult();
     res.json(result);
@@ -1178,7 +1179,7 @@ app.post('/api/prompt/generate', (req, res) => {
 // ============================================================
 // Static files for frontend (production)
 // ============================================================
-const frontendDist = path.resolve(MODULE_DIR, '..', '..', 'frontend', 'dist');
+const frontendDist = path.join(ROOT_DIR, 'apps', 'frontend', 'dist');
 if (fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   app.get('*', (_req, res) => {

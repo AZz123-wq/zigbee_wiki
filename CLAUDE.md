@@ -17,46 +17,19 @@
 my_wiki/
 ├── CLAUDE.md                   # 本文件
 ├── AGENTS.md                   # Wiki Schema 定义
-├── wiki/                       # LLM 生成的 Wiki 页面 (32 个 .md)
-│   ├── index.md                # 总索引
-│   ├── changelog.md            # 变更日志
-│   ├── summaries/              # 5 个摘要页
-│   ├── entities/               # 10 个实体页
-│   ├── concepts/               # 11 个概念页
-│   ├── comparisons/            # 2 个对比页
-│   └── syntheses/              # 1 个综合页
-├── raw/                        # 原始资料 (只读，35 个文件)
-│   ├── specs/                  # 9 个核心规范 PDF
-│   ├── test-specs/             # 24 个 Cluster 测试规范 PDF
-│   ├── presentations/          # 1 个 PPTX
-│   └── other/                  # 3 个 DOCX
-├── frontend/                   # React + Vite + TypeScript + Tailwind
-│   └── src/
-│       ├── components/         # Sidebar, ChatWindow, ChatInput,
-│       │                          MessageBubble, ConversationList,
-│       │                          ContextMenu, DetailDrawer,
-│       │                          ArchiveTimeline, PdfViewer
-│       ├── pages/              # ChatPage, RawFilesPage, ReviewPage,
-│       │                          CheckPage, SettingsPage
-│       └── lib/                # api.ts, store.ts (Zustand), types.ts
-├── server/                     # Node.js + Express
-│   └── src/
-│       ├── index.ts            # 所有 API 路由 + SSE 端点
-│       ├── llmClient.ts        # DeepSeek API (curl child_process)
-│       ├── pdfSafeReader.ts    # PDF 安全读取 (≤5 页)
-│       └── dataStore.ts        # JSON 文件存储
-├── scripts/                    # 索引与检查脚本
-│   ├── build-wiki-index.ts     # 扫描 Wiki → frontmatter + wikilinks
-│   ├── build-source-index.ts   # 扫描 Raw → PDF metadata
-│   └── check-wiki-health.ts    # 健康检查 (断链/孤立页/未处理文件)
-└── data/                       # 自动生成的 JSON 数据
-    ├── wiki-index.json         # Wiki 页面索引
-    ├── source-index.json       # Raw 文件索引
-    ├── check-results.json      # 健康检查结果
-    ├── conversations.json      # 对话历史
-    ├── messages.json           # 消息记录
-    ├── archives.json           # 归档流程
-    └── review-items.json       # 审查队列
+├── apps/
+│   ├── frontend/               # React + Vite + TypeScript + Tailwind
+│   │   └── src/                # components, pages, lib
+│   └── server/                 # Node.js + Express
+│       └── src/                # API, LLM, PDF reader, JSON stores
+├── knowledge/
+│   ├── wiki/                   # 结构化 Wiki 页面
+│   └── raw/                    # 原始资料，只读权威来源
+├── runtime/
+│   ├── data/                   # 索引、对话、消息、归档、审查队列
+│   └── outputs/                # 报告、演示或导出产物
+└── tools/
+    └── scripts/                # 索引与检查脚本
 ```
 
 ## 三、启动方式
@@ -64,15 +37,15 @@ my_wiki/
 ```bash
 # 1. 生成索引（首次或 raw 文件变更后）
 cd /root/my_wiki
-npx tsx scripts/build-wiki-index.ts
-npx tsx scripts/build-source-index.ts
+npx tsx tools/scripts/build-wiki-index.ts
+npx tsx tools/scripts/build-source-index.ts
 
 # 2. 启动后端 (port 3001)
 export DEEPSEEK_API_KEY="sk-..."
-cd /root/my_wiki/server && npx tsx src/index.ts
+cd /root/my_wiki/apps/server && npx tsx src/index.ts
 
 # 3. 启动前端 (port 5173)
-cd /root/my_wiki/frontend && npx vite --host 0.0.0.0
+cd /root/my_wiki/apps/frontend && npx vite --host 0.0.0.0
 
 # 访问 http://localhost:5173
 ```
@@ -104,7 +77,7 @@ cd /root/my_wiki/frontend && npx vite --host 0.0.0.0
 
 ### 1. LLM 网络问题 (已修复)
 **原因**：WSL 中 Node.js 的 `fetch`/`https.request` 无法解析外部 DNS，但系统 curl 正常。
-**修复**：`server/src/llmClient.ts` 改用 `child_process.execFile('curl', ...)` 调用 DeepSeek API。
+**修复**：`apps/server/src/llmClient.ts` 改用 `child_process.execFile('curl', ...)` 调用 DeepSeek API。
 
 ### 2. 待验证项
 - 聊天功能端到端测试（需 DEEPSEEK_API_KEY 有效且网络通）
@@ -127,7 +100,7 @@ cd /root/my_wiki/frontend && npx vite --host 0.0.0.0
 | MAX_RAW_FILES_PER_CHAT | 5 |
 | 前端端口 | 5173 |
 | 后端端口 | 3001 |
-| 存储方式 | JSON 文件 (data/) |
+| 存储方式 | JSON 文件 (runtime/data/) |
 
 ## 七、API 端点
 

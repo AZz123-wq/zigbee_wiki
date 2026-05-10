@@ -7,7 +7,8 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.resolve(MODULE_DIR, '..', '..', 'data');
+const ROOT_DIR = path.resolve(MODULE_DIR, '..', '..', '..');
+const DATA_DIR = path.join(ROOT_DIR, 'runtime', 'data');
 
 interface StoreFile<T> {
   data: T;

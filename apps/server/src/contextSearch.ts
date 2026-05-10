@@ -16,8 +16,8 @@ import {
 import { readPdfPages } from './pdfSafeReader.js';
 
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = path.resolve(MODULE_DIR, '..', '..');
-const WIKI_DIR = path.join(ROOT_DIR, 'wiki');
+const ROOT_DIR = path.resolve(MODULE_DIR, '..', '..', '..');
+const WIKI_DIR = path.join(ROOT_DIR, 'knowledge', 'wiki');
 const MAX_WIKI_CONTEXT_CHARS = 14000;
 const MAX_SOURCE_CONTEXT_CHARS = 22000;
 

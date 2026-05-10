@@ -7,8 +7,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const WIKI_DIR = path.resolve(__dirname, '..', 'wiki');
-const DATA_DIR = path.resolve(__dirname, '..', 'data');
+const ROOT_DIR = path.resolve(__dirname, '..', '..');
+const WIKI_DIR = path.join(ROOT_DIR, 'knowledge', 'wiki');
+const DATA_DIR = path.join(ROOT_DIR, 'runtime', 'data');
 const OUTPUT_FILE = path.join(DATA_DIR, 'wiki-index.json');
 
 interface WikiPage {

@@ -63,13 +63,13 @@ export default function SettingsPage() {
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
               <p className="text-sm text-gray-300">JSON 文件存储</p>
               <p className="text-xs text-gray-500 mt-1">
-                对话历史、归档流程、审查队列等数据存储在 data/ 目录下的 JSON 文件中。
+                对话历史、归档流程、审查队列等数据存储在 runtime/data/ 目录下的 JSON 文件中。
               </p>
               <div className="mt-2 space-y-1">
-                <code className="text-xs text-gray-400 block">data/conversations.json — 对话历史</code>
-                <code className="text-xs text-gray-400 block">data/messages.json — 消息记录</code>
-                <code className="text-xs text-gray-400 block">data/archives.json — 归档流程</code>
-                <code className="text-xs text-gray-400 block">data/review-items.json — 审查队列</code>
+                <code className="text-xs text-gray-400 block">runtime/data/conversations.json — 对话历史</code>
+                <code className="text-xs text-gray-400 block">runtime/data/messages.json — 消息记录</code>
+                <code className="text-xs text-gray-400 block">runtime/data/archives.json — 归档流程</code>
+                <code className="text-xs text-gray-400 block">runtime/data/review-items.json — 审查队列</code>
               </div>
             </div>
           </section>

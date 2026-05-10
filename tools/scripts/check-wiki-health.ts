@@ -8,7 +8,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const DATA_DIR = path.resolve(__dirname, '..', 'data');
+const ROOT_DIR = path.resolve(__dirname, '..', '..');
+const DATA_DIR = path.join(ROOT_DIR, 'runtime', 'data');
 const WIKI_INDEX = path.join(DATA_DIR, 'wiki-index.json');
 const SOURCE_INDEX = path.join(DATA_DIR, 'source-index.json');
 const OUTPUT_FILE = path.join(DATA_DIR, 'check-results.json');
@@ -230,9 +231,9 @@ function main() {
           title: `PDF metadata needs review: ${pdf.filename}`,
           message: `${pdf.pages} pages via ${pdf.page_count_source || 'unknown'}; warnings: ${(pdf.metadata_warnings || []).join('; ') || 'metadata mismatch'}`,
           file: `raw/${pdf.path}`,
-          related_files: ['data/source-quality-report.json'],
+          related_files: ['runtime/data/source-quality-report.json'],
           suggestion: `Review page-count candidates and extraction quality before relying on page-specific citations`,
-          claude_prompt: `The PDF raw/${pdf.path} has metadata warnings. Review data/source-quality-report.json and verify page count/extraction quality.`,
+          claude_prompt: `The PDF raw/${pdf.path} has metadata warnings. Review runtime/data/source-quality-report.json and verify page count/extraction quality.`,
         });
       } else if (pdf.pages > 200) {
         issues.push({

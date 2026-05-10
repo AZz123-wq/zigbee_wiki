@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUN_DIR="$ROOT_DIR/.workbench"
 LOG_DIR="$RUN_DIR/logs"
 ENV_FILE="$ROOT_DIR/.env.local"
@@ -17,13 +17,13 @@ mkdir -p "$RUN_DIR" "$LOG_DIR"
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/workbench.sh start [--api-key KEY] [--env-file FILE] [--server-port N] [--frontend-port N]
-  scripts/workbench.sh stop
-  scripts/workbench.sh restart [options]
-  scripts/workbench.sh status
-  scripts/workbench.sh logs [server|frontend]
-  scripts/workbench.sh env set KEY VALUE
-  scripts/workbench.sh env show
+  tools/scripts/workbench.sh start [--api-key KEY] [--env-file FILE] [--server-port N] [--frontend-port N]
+  tools/scripts/workbench.sh stop
+  tools/scripts/workbench.sh restart [options]
+  tools/scripts/workbench.sh status
+  tools/scripts/workbench.sh logs [server|frontend]
+  tools/scripts/workbench.sh env set KEY VALUE
+  tools/scripts/workbench.sh env show
 
 Notes:
   - API keys are read from the current environment, .env.local, or --api-key.
@@ -231,11 +231,11 @@ cmd_start() {
   ensure_port_available "frontend" "$FRONTEND_PORT" "$FRONTEND_PID"
   write_runtime_file
 
-  if ! start_one "server" "$SERVER_PID" "$LOG_DIR/server.log" "$ROOT_DIR/server" "$SERVER_PORT" ./node_modules/.bin/tsx src/index.ts; then
+  if ! start_one "server" "$SERVER_PID" "$LOG_DIR/server.log" "$ROOT_DIR/apps/server" "$SERVER_PORT" ./node_modules/.bin/tsx src/index.ts; then
     rm -f "$RUNTIME_FILE"
     return 1
   fi
-  if ! start_one "frontend" "$FRONTEND_PID" "$LOG_DIR/frontend.log" "$ROOT_DIR/frontend" "$FRONTEND_PORT" ./node_modules/.bin/vite --host 0.0.0.0 --port "$FRONTEND_PORT"; then
+  if ! start_one "frontend" "$FRONTEND_PID" "$LOG_DIR/frontend.log" "$ROOT_DIR/apps/frontend" "$FRONTEND_PORT" ./node_modules/.bin/vite --host 0.0.0.0 --port "$FRONTEND_PORT"; then
     stop_one "server" "$SERVER_PID"
     rm -f "$RUNTIME_FILE"
     return 1
@@ -315,7 +315,7 @@ case "${1:-}" in
   env)
     case "${2:-}" in
       set)
-        [[ $# -eq 4 ]] || { echo "Usage: scripts/workbench.sh env set KEY VALUE" >&2; exit 1; }
+        [[ $# -eq 4 ]] || { echo "Usage: tools/scripts/workbench.sh env set KEY VALUE" >&2; exit 1; }
         write_env_value "$3" "$4"
         echo "Wrote $3 to $ENV_FILE"
         ;;

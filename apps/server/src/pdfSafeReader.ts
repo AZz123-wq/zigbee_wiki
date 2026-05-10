@@ -9,7 +9,8 @@ import { fileURLToPath } from 'url';
 
 const MAX_PAGES_PER_READ = 5;
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
-const RAW_DIR = path.resolve(MODULE_DIR, '..', '..', 'raw');
+const ROOT_DIR = path.resolve(MODULE_DIR, '..', '..', '..');
+const RAW_DIR = path.join(ROOT_DIR, 'knowledge', 'raw');
 
 export interface PdfInfo {
   pages: number;

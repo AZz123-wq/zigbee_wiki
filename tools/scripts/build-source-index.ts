@@ -9,9 +9,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync } from 'child_process';
 
-const ROOT_DIR = path.resolve(__dirname, '..');
-const RAW_DIR = path.join(ROOT_DIR, 'raw');
-const DATA_DIR = path.join(ROOT_DIR, 'data');
+const ROOT_DIR = path.resolve(__dirname, '..', '..');
+const RAW_DIR = path.join(ROOT_DIR, 'knowledge', 'raw');
+const DATA_DIR = path.join(ROOT_DIR, 'runtime', 'data');
 const INBOX_DIR = path.join(RAW_DIR, 'inbox');
 const SOURCE_INDEX_FILE = path.join(DATA_DIR, 'source-index.json');
 const QUALITY_REPORT_FILE = path.join(DATA_DIR, 'source-quality-report.json');
@@ -824,10 +824,10 @@ function main() {
     linked_sources: linkedSources,
     unlinked_sources: unlinkedSources,
     generated_indexes: {
-      source_quality_report: 'data/source-quality-report.json',
-      source_page_index: 'data/source-page-index.json',
-      source_chunk_index: 'data/source-chunk-index.json',
-      source_outline_index: 'data/source-outline-index.json',
+      source_quality_report: 'runtime/data/source-quality-report.json',
+      source_page_index: 'runtime/data/source-page-index.json',
+      source_chunk_index: 'runtime/data/source-chunk-index.json',
+      source_outline_index: 'runtime/data/source-outline-index.json',
     },
     tools: {
       pdfinfo: commandExists('pdfinfo'),

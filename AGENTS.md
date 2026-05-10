@@ -9,12 +9,12 @@
 
 本仓库不是单纯的 Markdown Wiki，而是一个本地知识工作台：
 
-- `raw/` 保存 Zigbee 原始资料，作为权威来源。
-- `wiki/` 保存 LLM 生成和维护的结构化知识页。
-- `scripts/` 从 `wiki/` 和 `raw/` 生成索引并执行健康检查。
-- `server/` 提供 Express API、PDF 安全读取、聊天上下文组装和 JSON 存储。
-- `frontend/` 提供 React + Vite + Tailwind 的本地 ChatGPT 风格界面。
-- `data/` 保存索引、检查结果、对话、消息、归档和 review 队列。
+- `knowledge/raw/` 保存 Zigbee 原始资料，作为权威来源。
+- `knowledge/wiki/` 保存 LLM 生成和维护的结构化知识页。
+- `tools/scripts/` 从 `knowledge/wiki/` 和 `knowledge/raw/` 生成索引并执行健康检查。
+- `apps/server/` 提供 Express API、PDF 安全读取、聊天上下文组装和 JSON 存储。
+- `apps/frontend/` 提供 React + Vite + Tailwind 的本地 ChatGPT 风格界面。
+- `runtime/data/` 保存索引、检查结果、对话、消息、归档和 review 队列。
 
 Agent 的目标是让上述系统保持一致：资料可信、Wiki 可追溯、索引可再生成、前后端行为与安全限制一致。
 
@@ -27,60 +27,45 @@ my_wiki/
 ├── AGENTS.md                   # 本文件：Agent 规则
 ├── CLAUDE.md                   # 项目说明与运行文档
 ├── package.json                # 根脚本：index/check/dev/reindex
-├── scripts/                    # 索引与健康检查脚本
-│   ├── build-wiki-index.ts
-│   ├── build-source-index.ts
-│   └── check-wiki-health.ts
-├── raw/                        # 原始资料
-│   ├── specs/                  # 核心规范 PDF
-│   ├── test-specs/             # Cluster / Profile 测试规范 PDF
-│   ├── presentations/          # PPTX 培训资料
-│   ├── other/                  # DOCX 等杂项资料
-│   └── inbox/                  # 前端上传入口，待整理
-├── wiki/                       # 结构化知识库
-│   ├── index.md
-│   ├── changelog.md
-│   ├── summaries/
-│   ├── entities/
-│   ├── concepts/
-│   ├── comparisons/
-│   └── syntheses/
-├── data/                       # 运行时与生成数据
-│   ├── wiki-index.json
-│   ├── source-index.json
-│   ├── check-results.json
-│   ├── conversations.json
-│   ├── messages.json
-│   ├── archives.json
-│   └── review-items.json
-├── server/                     # Express + TypeScript API
-│   └── src/
-│       ├── index.ts
-│       ├── dataStore.ts
-│       ├── llmClient.ts
-│       └── pdfSafeReader.ts
-├── frontend/                   # React + Vite + Tailwind UI
-│   └── src/
-│       ├── components/
-│       ├── pages/
-│       └── lib/
-└── outputs/                    # 报告、演示或导出产物
+├── apps/
+│   ├── frontend/               # React + Vite + Tailwind UI
+│   └── server/                 # Express + TypeScript API
+├── knowledge/
+│   ├── raw/                    # 原始资料
+│   │   ├── specs/
+│   │   ├── test-specs/
+│   │   ├── presentations/
+│   │   ├── other/
+│   │   └── inbox/
+│   └── wiki/                   # 结构化知识库
+│       ├── index.md
+│       ├── changelog.md
+│       ├── summaries/
+│       ├── entities/
+│       ├── concepts/
+│       ├── comparisons/
+│       └── syntheses/
+├── runtime/
+│   ├── data/                   # 运行时与生成数据
+│   └── outputs/                # 报告、演示或导出产物
+└── tools/
+    └── scripts/                # 索引与健康检查脚本
 ```
 
 ---
 
 ## 三、不可破坏的边界
 
-1. **不要修改 `raw/specs/`、`raw/test-specs/`、`raw/presentations/`、`raw/other/` 中的原始资料。**
+1. **不要修改 `knowledge/raw/specs/`、`knowledge/raw/test-specs/`、`knowledge/raw/presentations/`、`knowledge/raw/other/` 中的原始资料。**
    - 这些文件是权威来源，只读。
-   - 如需新增资料，优先放入 `raw/inbox/`，再由 ingest 流程整理。
+   - 如需新增资料，优先放入 `knowledge/raw/inbox/`，再由 ingest 流程整理。
 2. **不要手工伪造来源。**
-   - Wiki 页面必须引用实际存在的 `raw/...` 文件。
+   - Wiki 页面必须引用实际存在的 `knowledge/raw/...` 文件；frontmatter 中的来源 ID 继续使用 `raw/...` 逻辑路径。
    - 不确定的信息要标注为“推断/总结”，不能写成规范原文。
 3. **不要把 API Key 或本地私密配置写入仓库。**
    - 后端读取 `DEEPSEEK_API_KEY`。
    - `ANTHROPIC_BASE_URL` 和 `ANTHROPIC_MODEL` 当前被用作可配置的 OpenAI-compatible DeepSeek 端点变量名。
-4. **谨慎处理 `data/`。**
+4. **谨慎处理 `runtime/data/`。**
    - `wiki-index.json`、`source-index.json`、`check-results.json` 可由脚本再生成。
    - `conversations.json`、`messages.json`、`archives.json`、`review-items.json` 是运行时用户数据；除非任务明确要求，不要手工清空、重排或批量改写。
 5. **不要绕过 PDF 安全限制。**
@@ -94,11 +79,11 @@ my_wiki/
 
 ### 4.1 页面类型与路径
 
-- `wiki/summaries/`：一个源文件或一批强相关源文件的摘要。
-- `wiki/entities/`：Cluster、Device Type、Spec 版本、Stack Layer 等具名对象。
-- `wiki/concepts/`：Binding、Reporting、Commissioning、Security 等机制或流程。
-- `wiki/comparisons/`：版本、规范、测试要求之间的对比。
-- `wiki/syntheses/`：跨文档综合判断、盘点、长期有价值的研究结论。
+- `knowledge/wiki/summaries/`：一个源文件或一批强相关源文件的摘要。
+- `knowledge/wiki/entities/`：Cluster、Device Type、Spec 版本、Stack Layer 等具名对象。
+- `knowledge/wiki/concepts/`：Binding、Reporting、Commissioning、Security 等机制或流程。
+- `knowledge/wiki/comparisons/`：版本、规范、测试要求之间的对比。
+- `knowledge/wiki/syntheses/`：跨文档综合判断、盘点、长期有价值的研究结论。
 
 ### 4.2 命名规范
 
@@ -188,9 +173,9 @@ cluster_id: "0x0006"
 
 ### 6.1 Ingest：摄入资料
 
-当处理 `raw/` 下新资料或未入库资料时：
+当处理 `knowledge/raw/` 下新资料或未入库资料时：
 
-1. 检查 `wiki/changelog.md`、`data/source-index.json` 和已有 `wiki/summaries/`，避免重复 ingest。
+1. 检查 `knowledge/wiki/changelog.md`、`runtime/data/source-index.json` 和已有 `knowledge/wiki/summaries/`，避免重复 ingest。
 2. 对 PDF 先做预检查和结构扫描：
    - 使用 `/root/pdf_extract.py check <file.pdf>` 或脚本索引结果判断页数、可提取性和风险。
    - 大于 5MB 或超过 30 页的 PDF 必须分阶段读取。
@@ -203,8 +188,8 @@ cluster_id: "0x0006"
    - 已存在实体页时更新，不要创建重复实体。
 5. 提取概念页：
    - Commissioning、Binding、Reporting、Security、OTA、Touchlink 等机制。
-6. 更新 `wiki/index.md`。
-7. 更新 `wiki/changelog.md`，记录来源文件、新建页、更新页和待深入事项。
+6. 更新 `knowledge/wiki/index.md`。
+7. 更新 `knowledge/wiki/changelog.md`，记录来源文件、新建页、更新页和待深入事项。
 8. 运行索引和健康检查：
 
 ```bash
@@ -215,10 +200,10 @@ npm run reindex
 
 回答用户问题时：
 
-1. 优先搜索 `wiki/`，必要时查 `data/wiki-index.json` 和 `data/source-index.json`。
-2. 如 Wiki 不足，再按页读取 `raw/` 中相关文档。
+1. 优先搜索 `knowledge/wiki/`，必要时查 `runtime/data/wiki-index.json` 和 `runtime/data/source-index.json`。
+2. 如 Wiki 不足，再按页读取 `knowledge/raw/` 中相关文档。
 3. 回答中引用具体页面或来源，例如 `[[entities/cluster-on-off]]`、`raw/specs/...pdf p.12`。
-4. 长期有价值的结论，应询问是否归档为 `wiki/syntheses/` 页面。
+4. 长期有价值的结论，应询问是否归档为 `knowledge/wiki/syntheses/` 页面。
 
 ### 6.3 Lint：健康检查
 
@@ -249,10 +234,10 @@ npm run check
 ### 7.1 技术栈
 
 - 根目录脚本使用 TypeScript + `tsx`。
-- 后端：`server/`，Express + TypeScript，端口默认 `3001`。
-- 前端：`frontend/`，React 18 + Vite + TypeScript + Tailwind，端口默认 `5173`。
+- 后端：`apps/server/`，Express + TypeScript，端口默认 `3001`。
+- 前端：`apps/frontend/`，React 18 + Vite + TypeScript + Tailwind，端口默认 `5173`。
 - UI 图标库：`lucide-react`。
-- 本地存储：`data/*.json`，通过 `server/src/dataStore.ts` 读写。
+- 本地存储：`runtime/data/*.json`，通过 `apps/server/src/dataStore.ts` 读写。
 
 ### 7.2 常用命令
 
@@ -273,39 +258,39 @@ npm run dev:server
 npm run dev:frontend
 
 # 前端构建
-cd frontend && npm run build
+cd apps/frontend && npm run build
 
 # 后端构建
-cd server && npm run build
+cd apps/server && npm run build
 ```
 
 ### 7.3 后端规则
 
-1. API 路由集中在 `server/src/index.ts`。
-2. JSON 文件读写必须通过 `server/src/dataStore.ts` 的 store 模式，避免多个地方直接改写运行时数据。
-3. PDF 读取必须通过 `server/src/pdfSafeReader.ts`，保留并维护这些硬限制：
+1. API 路由集中在 `apps/server/src/index.ts`。
+2. JSON 文件读写必须通过 `apps/server/src/dataStore.ts` 的 store 模式，避免多个地方直接改写运行时数据。
+3. PDF 读取必须通过 `apps/server/src/pdfSafeReader.ts`，保留并维护这些硬限制：
    - `MAX_PAGES_PER_READ = 5`
    - `MAX_MARKDOWN_CHARS_PER_PAGE` / 单次文本截断约 30000 字符
    - 上下文总量约 60000 字符
-4. LLM 调用在 `server/src/llmClient.ts`。
+4. LLM 调用在 `apps/server/src/llmClient.ts`。
    - 当前实现使用 `curl` child process 调用 OpenAI-compatible API，适配 WSL 中 Node fetch/DNS 问题。
    - 修改模型或端点时，保持环境变量方式，不要硬编码密钥。
-5. 上传文件只进入 `raw/inbox/`，上传后需要重新生成 source index 才会进入索引视图。
+5. 上传文件只进入 `knowledge/raw/inbox/`，上传后需要重新生成 source index 才会进入索引视图。
 
 ### 7.4 前端规则
 
-1. 页面在 `frontend/src/pages/`，复用组件在 `frontend/src/components/`，API 和类型在 `frontend/src/lib/`。
+1. 页面在 `apps/frontend/src/pages/`，复用组件在 `apps/frontend/src/components/`，API 和类型在 `apps/frontend/src/lib/`。
 2. 前端不直接调用 LLM，不保存 API Key。
-3. API 调用集中在 `frontend/src/lib/api.ts`。
-4. 全局状态通过 `frontend/src/lib/store.ts`。
+3. API 调用集中在 `apps/frontend/src/lib/api.ts`。
+4. 全局状态通过 `apps/frontend/src/lib/store.ts`。
 5. UI 文案当前以中文为主，保持一致。
 6. 新增界面时保持工作台风格：信息密度适中、深色模式一致、控件状态明确。
 
 ### 7.5 脚本规则
 
-1. `scripts/build-wiki-index.ts` 是 Wiki 页面、frontmatter、wikilink、backlink 的索引来源。
-2. `scripts/build-source-index.ts` 是 raw 文件、PDF 元数据、source/wiki 关联状态的索引来源。
-3. `scripts/check-wiki-health.ts` 是健康评分和 review prompt 的来源。
+1. `tools/scripts/build-wiki-index.ts` 是 Wiki 页面、frontmatter、wikilink、backlink 的索引来源。
+2. `tools/scripts/build-source-index.ts` 是 raw 文件、PDF 元数据、source/wiki 关联状态的索引来源。
+3. `tools/scripts/check-wiki-health.ts` 是健康评分和 review prompt 的来源。
 4. 修改 Wiki schema、frontmatter 字段或 wikilink 规则时，必须同步更新相关脚本。
 
 ---
@@ -316,9 +301,9 @@ cd server && npm run build
 
 以下文件可由脚本重建：
 
-- `data/wiki-index.json`
-- `data/source-index.json`
-- `data/check-results.json`
+- `runtime/data/wiki-index.json`
+- `runtime/data/source-index.json`
+- `runtime/data/check-results.json`
 
 修改 Wiki 或 raw 资料后应重新生成。
 
@@ -326,10 +311,10 @@ cd server && npm run build
 
 以下文件来自应用运行：
 
-- `data/conversations.json`
-- `data/messages.json`
-- `data/archives.json`
-- `data/review-items.json`
+- `runtime/data/conversations.json`
+- `runtime/data/messages.json`
+- `runtime/data/archives.json`
+- `runtime/data/review-items.json`
 
 除非任务明确要求迁移、修复或清理用户数据，不要直接编辑这些文件。若必须编辑，先理解当前 JSON wrapper 格式：
 
@@ -349,10 +334,10 @@ cd server && npm run build
 1. 优先使用项目脚本或 `/root/pdf_extract.py`：
 
 ```bash
-python3 /root/pdf_extract.py check raw/specs/example.pdf
-python3 /root/pdf_extract.py scan raw/specs/example.pdf "OnOff,Binding"
-python3 /root/pdf_extract.py raw/specs/example.pdf 10 14
-python3 /root/pdf_extract.py diff raw/specs/a.pdf raw/specs/b.pdf "keyword"
+python3 /root/pdf_extract.py check knowledge/raw/specs/example.pdf
+python3 /root/pdf_extract.py scan knowledge/raw/specs/example.pdf "OnOff,Binding"
+python3 /root/pdf_extract.py knowledge/raw/specs/example.pdf 10 14
+python3 /root/pdf_extract.py diff knowledge/raw/specs/a.pdf knowledge/raw/specs/b.pdf "keyword"
 ```
 
 2. 大 PDF 流程：
@@ -386,17 +371,17 @@ npm run reindex
 - 改后端：
 
 ```bash
-cd server && npm run build
+cd apps/server && npm run build
 ```
 
 - 改前端：
 
 ```bash
-cd frontend && npm run build
+cd apps/frontend && npm run build
 ```
 
 - 改前后端 API 契约：
-  - 同时检查 `server/src/index.ts` 和 `frontend/src/lib/api.ts`。
+  - 同时检查 `apps/server/src/index.ts` 和 `apps/frontend/src/lib/api.ts`。
   - 至少运行前端和后端构建。
 
 启动本地服务：
@@ -415,14 +400,14 @@ npm run dev:frontend
 
 ## 十一、变更记录要求
 
-涉及 Wiki 内容变化时，必须更新 `wiki/changelog.md`，格式示例：
+涉及 Wiki 内容变化时，必须更新 `knowledge/wiki/changelog.md`，格式示例：
 
 ```markdown
 ## 2026-05-08
 
-- ✅ Ingest: `raw/specs/example.pdf` → `wiki/summaries/2026-05-08-example.md`
-  - 新建实体: `wiki/entities/cluster-example.md`
-  - 更新概念: `wiki/concepts/reporting.md`
+- ✅ Ingest: `knowledge/raw/specs/example.pdf` → `knowledge/wiki/summaries/2026-05-08-example.md`
+  - 新建实体: `knowledge/wiki/entities/cluster-example.md`
+  - 更新概念: `knowledge/wiki/concepts/reporting.md`
   - 验证: `npm run reindex`
 ```
 
@@ -433,10 +418,10 @@ npm run dev:frontend
 ## 十二、Agent 行为准则
 
 1. 先搜索已有页面和代码，再决定新增或修改。
-2. 保持交叉引用：新增 Wiki 页面后，从 `wiki/index.md` 和相关页面补充 `[[...]]`。
+2. 保持交叉引用：新增 Wiki 页面后，从 `knowledge/wiki/index.md` 和相关页面补充 `[[...]]`。
 3. 信息分级清楚：规范原文、测试要求、实现观察、推断总结要分开写。
 4. 页面粒度适中：实体页聚焦一个对象，综合页才承载跨文档判断。
 5. 修改代码时遵循现有结构，不引入不必要的新框架。
-6. 修改脚本或 schema 时，同步考虑前端展示、后端 API 和 `data/*.json` 结构。
+6. 修改脚本或 schema 时，同步考虑前端展示、后端 API 和 `runtime/data/*.json` 结构。
 7. 遇到用户运行时数据的未提交改动，默认视为用户数据，不要回滚。
 8. 完成后说明验证结果；如果无法验证，明确说明原因。
