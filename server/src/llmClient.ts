@@ -482,15 +482,16 @@ function chatAnthropicStream(
   });
 }
 
-export function buildSystemPrompt(wikiPages: string[], pdfPages: { path: string; text: string }[]): string {
+export function buildSystemPrompt(wikiPages: string[], pdfPages: { path: string; text: string; pages?: number[] }[]): string {
   let prompt = `你是一个 Zigbee 协议专家助手，基于本地 Wiki 知识库回答问题。
 
 规则：
-1. 基于提供的 Wiki 内容和文档内容回答
-2. 引用具体的 Wiki 页面，使用 [[页面名]] 格式
-3. 如果发现知识库的空白或不一致之处，请指出
-4. 保持回答聚焦、结构化，使用中文回复
-5. 不要编造上下文中不存在的信息
+1. 只能基于提供的 Wiki 内容、PDF/source 摘录和 evidence pack 回答。
+2. 回答中引用具体来源：Wiki 用 [[页面名]]；PDF/source 用 \`raw/...pdf p.N\` 或页码范围。
+3. 明确区分协议规范、测试要求、实现观察和推断总结。
+4. 如果检索到了相关摘录但仍不足以确认细节，请说明缺口；不要说“知识库空白”。
+5. 保持回答聚焦、结构化，使用中文回复。
+6. 不要编造上下文中不存在的信息。
 
 `;
 
@@ -499,9 +500,10 @@ export function buildSystemPrompt(wikiPages: string[], pdfPages: { path: string;
   }
 
   if (pdfPages.length > 0) {
-    prompt += `## PDF 文档摘录\n\n`;
+    prompt += `## PDF/source 摘录与 Evidence Pack\n\n`;
     for (const pp of pdfPages) {
-      prompt += `### 来自: ${pp.path}\n\n${pp.text.slice(0, 5000)}\n\n`;
+      const pageLabel = pp.pages?.length ? ` p.${pp.pages.join(',')}` : '';
+      prompt += `### 来自: ${pp.path}${pageLabel}\n\n${pp.text.slice(0, 5000)}\n\n`;
     }
   }
 

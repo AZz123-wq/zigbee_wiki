@@ -9,20 +9,23 @@ import { v4 as uuidv4 } from 'uuid';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
 
-import { conversationStore, archiveStore, reviewStore, messageStore, getWikiIndex, getSourceIndex, getCheckResult } from './dataStore.js';
+import { conversationStore, archiveStore, reviewStore, messageStore, researchRunStore, evidencePackStore, getWikiIndex, getSourceIndex, getCheckResult } from './dataStore.js';
 import { getPdfInfo, readPdfPages, detectPdfRisk } from './pdfSafeReader.js';
 import { chat, chatStream, buildSystemPrompt } from './llmClient.js';
+import { buildChatContext, maybeSaveEvidencePack, saveResearchRun, type Citation, type SearchTrace } from './contextSearch.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
 
 // File upload config
-const RAW_DIR = path.resolve(import.meta.dirname, '..', '..', 'raw');
+const RAW_DIR = path.resolve(MODULE_DIR, '..', '..', 'raw');
 const INBOX_DIR = path.join(RAW_DIR, 'inbox');
 fs.mkdirSync(INBOX_DIR, { recursive: true });
 
@@ -31,6 +34,94 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50MB
   preservePath: true,
 });
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))];
+}
+
+function citationPdfRefs(citations: Citation[]): { path: string; pages: number[] }[] {
+  const refs = new Map<string, Set<number>>();
+  for (const citation of citations) {
+    if (citation.type !== 'pdf' || !citation.path) continue;
+    if (!refs.has(citation.path)) refs.set(citation.path, new Set());
+    for (const page of citation.pages || []) refs.get(citation.path)!.add(page);
+  }
+  return [...refs.entries()].map(([path, pages]) => ({
+    path,
+    pages: [...pages].sort((a, b) => a - b),
+  }));
+}
+
+function citationRawPaths(citations: Citation[]): string[] {
+  return uniqueStrings(citations
+    .filter((citation) => citation.type === 'raw' || citation.type === 'pdf')
+    .map((citation) => citation.path));
+}
+
+function citationWikiPaths(citations: Citation[]): string[] {
+  return uniqueStrings(citations
+    .filter((citation) => citation.type === 'wiki')
+    .map((citation) => citation.path));
+}
+
+function createAutoReviewItem(params: {
+  conversation_id: string;
+  message: string;
+  assistantContent: string;
+  citations: Citation[];
+  trace: SearchTrace;
+}) {
+  if (!params.trace.auto_context_used || params.assistantContent.length < 80) return null;
+
+  const id = uuidv4();
+  const item = {
+    id,
+    type: 'improve_summary',
+    title: `沉淀自动检索问答: ${params.message.slice(0, 40)}`,
+    source_conversation_id: params.conversation_id,
+    target_page: 'wiki/syntheses/',
+    related_raw_files: citationRawPaths(params.citations),
+    related_pdf_pages: citationPdfRefs(params.citations),
+    severity: 'medium',
+    status: 'pending',
+    summary: `自动检索命中 ${params.trace.selected_source_chunks.length} 个 source chunk、${params.trace.selected_wiki_pages.length} 个 Wiki 页面。`,
+    claude_prompt: [
+      '# Wiki Review Task',
+      '',
+      `Question: ${params.message}`,
+      '',
+      'Review the answer against the cited source chunks, then decide whether to create or update a Wiki concept/synthesis page.',
+      '',
+      `Answer excerpt: ${params.assistantContent.slice(0, 800)}`,
+      '',
+      `Citations: ${params.citations.map((c) => `${c.type}:${c.path}${c.pages?.length ? ` p.${c.pages.join(',')}` : ''}`).join('; ')}`,
+    ].join('\n'),
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  reviewStore.update((d) => {
+    const duplicate = d.review_items.find((r: any) =>
+      r.source_conversation_id === params.conversation_id &&
+      r.title === item.title
+    );
+    if (!duplicate) d.review_items.unshift(item);
+    return d;
+  });
+  return item;
+}
+
+function applyConversationContextMetadata(c: Record<string, any>, message: string, citations: Citation[]) {
+  c.updated_at = new Date().toISOString();
+  c.message_count = Number(c.message_count ?? 0) + 2;
+  c.last_summary = message.slice(0, 100);
+  c.has_raw = Boolean(c.has_raw || citationRawPaths(citations).length > 0);
+  c.has_pdf = Boolean(c.has_pdf || citationPdfRefs(citations).length > 0);
+  c.related_raw_files = uniqueStrings([...(c.related_raw_files || []), ...citationRawPaths(citations)]);
+  c.related_wiki_pages = uniqueStrings([...(c.related_wiki_pages || []), ...citationWikiPaths(citations)]);
+  c.related_pdf_pages = citationPdfRefs(citations);
+  return c;
+}
 
 // ============================================================
 // Index Summary
@@ -184,42 +275,19 @@ app.post('/api/chat', async (req, res) => {
       return d;
     });
 
-    // Load wiki page content
-    const wikiIndex = getWikiIndex();
-    let wikiContent: string[] = [];
-    if (wikiIndex && wiki_pages.length > 0) {
-      const pages = (wikiIndex as any).pages || [];
-      const selected = pages.filter((p: any) =>
-        wiki_pages.includes(p.path) || wiki_pages.includes(p.id)
-      );
-      for (const p of selected) {
-        try {
-          const wikiPath = path.resolve(import.meta.dirname, '..', '..', 'wiki', p.path);
-          if (fs.existsSync(wikiPath)) {
-            const content = fs.readFileSync(wikiPath, 'utf-8');
-            wikiContent.push(`### ${p.path}\n\n${content.slice(0, 5000)}`);
-          }
-        } catch {}
-      }
-    }
-
-    // Load PDF page content
-    let pdfContent: { path: string; text: string }[] = [];
-    const MAX_PDF_READS = 5;
-    let readCount = 0;
-
-    for (const pp of pdf_pages.slice(0, 3)) { // max 3 PDF sources
-      if (readCount >= MAX_PDF_READS) break;
-      try {
-        const startPage = Math.max(1, pp.pages?.[0] || 1);
-        const endPage = Math.min(startPage + 2, pp.pages?.[pp.pages.length - 1] || startPage + 2);
-        const result = readPdfPages(pp.path, startPage, endPage);
-        if (result.text && !result.error) {
-          pdfContent.push({ path: pp.path, text: result.text });
-          readCount++;
-        }
-      } catch {}
-    }
+    // Load manual context and append high-confidence automatic retrieval.
+    let {
+      wikiContent,
+      pdfContent,
+      citations,
+      trace: searchTrace,
+    } = buildChatContext({
+      query: message,
+      wiki_pages,
+      raw_files,
+      pdf_pages,
+      allowAuto: true,
+    });
 
     // Build chat messages
     const systemPrompt = buildSystemPrompt(wikiContent, pdfContent);
@@ -237,7 +305,7 @@ app.post('/api/chat', async (req, res) => {
     ];
 
     // Estimate total context
-    const contextEstimate = chatMessages.reduce(
+    let contextEstimate = chatMessages.reduce(
       (sum, m) => sum + m.content.length, 0
     );
 
@@ -246,8 +314,10 @@ app.post('/api/chat', async (req, res) => {
     if (contextEstimate > MAX_CONTEXT) {
       // Try with shorter wiki content
       wikiContent = wikiContent.map((c) => c.slice(0, 2000));
+      pdfContent = pdfContent.map((c) => ({ ...c, text: c.text.slice(0, 4000) }));
       const slimSystem = buildSystemPrompt(wikiContent, pdfContent);
       chatMessages[0] = { role: 'system', content: slimSystem };
+      contextEstimate = chatMessages.reduce((sum, m) => sum + m.content.length, 0);
     }
 
     // Call LLM
@@ -275,17 +345,31 @@ app.post('/api/chat', async (req, res) => {
       role: 'assistant',
       content: assistantContent,
       created_at: new Date().toISOString(),
-      citations: [
-        ...wiki_pages.map((wp: string) => ({ type: 'wiki', title: wp, path: wp })),
-        ...raw_files.map((rf: string) => ({ type: 'raw', title: rf, path: rf })),
-        ...pdf_pages.map((pp: any) => ({ type: 'pdf', title: pp.path, path: pp.path, pages: pp.pages })),
-      ],
+      citations,
+      search_trace: searchTrace,
+      related_pdf_pages: citationPdfRefs(citations),
       model: modelName,
       token_estimate: contextEstimate,
     };
     messageStore.update((d) => {
       d.messages.push(assistantMsg);
       return d;
+    });
+
+    saveResearchRun(searchTrace, {
+      conversation_id: convId,
+      user_message_id: userMsg.id,
+      assistant_message_id: assistantMsg.id,
+      citations,
+      token_estimate: contextEstimate,
+    });
+    const evidencePack = maybeSaveEvidencePack(searchTrace, citations);
+    const reviewItem = createAutoReviewItem({
+      conversation_id: convId,
+      message,
+      assistantContent,
+      citations,
+      trace: searchTrace,
     });
 
     // Generate archive
@@ -319,15 +403,18 @@ app.post('/api/chat', async (req, res) => {
           status: 'completed',
           started_at: new Date().toISOString(),
           finished_at: new Date().toISOString(),
-          summary: `Used ${wiki_pages.length} wiki pages, ${raw_files.length} raw files, ${pdf_pages.length} PDF ranges`,
+          summary: `Used ${wikiContent.length} wiki context blocks, ${pdfContent.length} source blocks; auto retrieval ${searchTrace.auto_context_used ? 'enabled' : 'not used'}`,
           details: {
             wiki_pages_used: wiki_pages,
             raw_files_used: raw_files,
             pdf_ranges: pdf_pages,
+            citations,
+            search_trace: searchTrace,
+            evidence_pack_id: evidencePack?.id,
             truncated: contextEstimate > MAX_CONTEXT,
           },
-          related_files: [...wiki_pages, ...raw_files],
-          related_pages: wiki_pages,
+          related_files: citationRawPaths(citations),
+          related_pages: citationWikiPaths(citations),
         },
         {
           id: uuidv4(),
@@ -364,11 +451,12 @@ app.post('/api/chat', async (req, res) => {
           title: 'Review Status',
           status: 'pending',
           started_at: new Date().toISOString(),
-          summary: 'Pending manual review',
+          summary: reviewItem ? 'Automatic retrieval answer queued for manual Wiki review' : 'Pending manual review',
           details: {
-            needs_review: true,
+            needs_review: Boolean(reviewItem),
+            review_item_id: reviewItem?.id,
             risk_level: 'low',
-            pending_items: ['Manual verification of LLM response accuracy'],
+            pending_items: reviewItem ? ['Verify answer against citations and wikify durable conclusion'] : ['Manual verification of LLM response accuracy'],
           },
           related_files: [],
           related_pages: [],
@@ -392,16 +480,17 @@ app.post('/api/chat', async (req, res) => {
           started_at: new Date().toISOString(),
           summary: 'Claude Code prompt generated for manual processing',
           details: {
-            generated_prompt: `# Wiki Update Task from Conversation\n\nReview this conversation and:\n1. Verify the assistant's response against source documents\n2. If the response contains valuable new insights, create or update wiki pages\n3. Add any missing wikilinks\n4. Run /wiki-lint after changes\n\n## Conversation Summary\n\nQuestion: ${message.slice(0, 200)}\n\nAnswer: ${assistantContent.slice(0, 500)}\n\n## Related Files\n${[...wiki_pages, ...raw_files].map((f) => `- ${f}`).join('\n')}`,
+            generated_prompt: `# Wiki Update Task from Conversation\n\nReview this conversation and:\n1. Verify the assistant's response against source documents\n2. If the response contains valuable new insights, create or update wiki pages\n3. Add any missing wikilinks\n4. Run /wiki-lint after changes\n\n## Conversation Summary\n\nQuestion: ${message.slice(0, 200)}\n\nAnswer: ${assistantContent.slice(0, 500)}\n\n## Citations\n${citations.map((c) => `- ${c.type}: ${c.path}${c.pages?.length ? ` p.${c.pages.join(',')}` : ''}`).join('\n')}`,
           },
           related_files: [],
           related_pages: [],
         },
       ],
-      context_summary: `Wiki pages: ${wiki_pages.join(', ') || 'none'}. Raw files: ${raw_files.join(', ') || 'none'}`,
-      raw_files: raw_files,
-      wiki_pages: wiki_pages,
-      pdf_refs: pdf_pages,
+      context_summary: `Wiki pages: ${citationWikiPaths(citations).join(', ') || 'none'}. Sources: ${citationRawPaths(citations).join(', ') || 'none'}`,
+      raw_files: citationRawPaths(citations),
+      wiki_pages: citationWikiPaths(citations),
+      pdf_refs: citationPdfRefs(citations),
+      search_trace: searchTrace,
       model_runs: [{
         model: modelName,
         input_estimate: contextEstimate,
@@ -409,7 +498,7 @@ app.post('/api/chat', async (req, res) => {
         error: errorMsg,
       }],
       update_proposals: [],
-      review_items: [],
+      review_items: reviewItem ? [reviewItem.id] : [],
       writeback_status: 'not_applied',
       generated_prompt: '',
     };
@@ -420,19 +509,17 @@ app.post('/api/chat', async (req, res) => {
     });
 
     // Update conversation metadata
-    conversationStore.update((d) => {
+    const convData = conversationStore.update((d) => {
       const idx = d.conversations.findIndex((c: any) => c.id === convId);
       if (idx === -1) return d;
-      const c = d.conversations[idx] as any;
-      c.updated_at = new Date().toISOString();
-      c.message_count += 2;
-      c.last_summary = message.slice(0, 100);
-      d.conversations[idx] = c;
+      d.conversations[idx] = applyConversationContextMetadata(d.conversations[idx] as any, message, citations);
       return d;
     });
+    const updatedConversation = convData.conversations.find((c: any) => c.id === convId);
 
     res.json({
       message: assistantMsg,
+      conversation: updatedConversation,
       archive_id: archiveId,
       update_proposals: [],
     });
@@ -520,30 +607,18 @@ app.post('/api/chat/stream', async (req, res) => {
     sendSSE('user_msg', userMsg);
     sendThinkingStatus();
 
-    // Load context (same as regular chat)
-    const wikiIndex = getWikiIndex();
-    let wikiContent: string[] = [];
-    if (wikiIndex && wiki_pages.length > 0) {
-      const pages = (wikiIndex as any).pages || [];
-      for (const p of pages.filter((p: any) => wiki_pages.includes(p.path) || wiki_pages.includes(p.id))) {
-        try {
-          const wikiPath = path.resolve(import.meta.dirname, '..', '..', 'wiki', p.path);
-          if (fs.existsSync(wikiPath)) {
-            wikiContent.push(`### ${p.path}\n\n${fs.readFileSync(wikiPath, 'utf-8').slice(0, 5000)}`);
-          }
-        } catch {}
-      }
-    }
-
-    let pdfContent: { path: string; text: string }[] = [];
-    for (const pp of pdf_pages.slice(0, 3)) {
-      try {
-        const startPage = Math.max(1, pp.pages?.[0] || 1);
-        const endPage = Math.min(startPage + 2, pp.pages?.[pp.pages.length - 1] || startPage + 2);
-        const result = readPdfPages(pp.path, startPage, endPage);
-        if (result.text && !result.error) pdfContent.push({ path: pp.path, text: result.text });
-      } catch {}
-    }
+    let {
+      wikiContent,
+      pdfContent,
+      citations,
+      trace: searchTrace,
+    } = buildChatContext({
+      query: message,
+      wiki_pages,
+      raw_files,
+      pdf_pages,
+      allowAuto: true,
+    });
 
     const systemPrompt = buildSystemPrompt(wikiContent, pdfContent);
 
@@ -558,6 +633,15 @@ app.post('/api/chat/stream', async (req, res) => {
       ...previousMessages,
       { role: 'user' as const, content: message },
     ];
+
+    const MAX_CONTEXT = 60000;
+    let contextEstimate = chatMessages.reduce((sum, m) => sum + m.content.length, 0);
+    if (contextEstimate > MAX_CONTEXT) {
+      wikiContent = wikiContent.map((c) => c.slice(0, 2000));
+      pdfContent = pdfContent.map((c) => ({ ...c, text: c.text.slice(0, 4000) }));
+      chatMessages[0] = { role: 'system', content: buildSystemPrompt(wikiContent, pdfContent) };
+      contextEstimate = chatMessages.reduce((sum, m) => sum + m.content.length, 0);
+    }
 
     // Call LLM and forward real streaming tokens.
     try {
@@ -586,37 +670,133 @@ app.post('/api/chat/stream', async (req, res) => {
         role: 'assistant',
         content: fullContent,
         created_at: new Date().toISOString(),
-        citations: [
-          ...wiki_pages.map((wp: string) => ({ type: 'wiki', title: wp, path: wp })),
-          ...raw_files.map((rf: string) => ({ type: 'raw', title: rf, path: rf })),
-          ...pdf_pages.map((pp: any) => ({ type: 'pdf', title: pp.path, path: pp.path, pages: pp.pages })),
-        ],
+        citations,
+        search_trace: searchTrace,
+        related_pdf_pages: citationPdfRefs(citations),
         model: response.model,
-        token_estimate: fullContent.length,
+        token_estimate: contextEstimate,
       };
       messageStore.update((d) => {
         d.messages.push(assistantMsg);
         return d;
       });
 
-      conversationStore.update((d) => {
-        const idx = d.conversations.findIndex((c: any) => c.id === convId);
-        if (idx >= 0) {
-          const c = d.conversations[idx] as Record<string, any>;
-          c.updated_at = new Date().toISOString();
-          c.message_count = Number(c.message_count ?? 0) + 2;
-          c.last_summary = message.slice(0, 100);
-          c.has_raw = c.has_raw || raw_files.length > 0;
-          c.has_pdf = c.has_pdf || pdf_pages.length > 0;
-          c.related_raw_files = raw_files || c.related_raw_files || [];
-          c.related_wiki_pages = wiki_pages || c.related_wiki_pages || [];
-          c.related_pdf_pages = pdf_pages || c.related_pdf_pages || [];
-          d.conversations[idx] = c;
-        }
+      saveResearchRun(searchTrace, {
+        conversation_id: convId,
+        user_message_id: userMsg.id,
+        assistant_message_id: assistantMsg.id,
+        citations,
+        token_estimate: contextEstimate,
+      });
+      const evidencePack = maybeSaveEvidencePack(searchTrace, citations);
+      const reviewItem = createAutoReviewItem({
+        conversation_id: convId,
+        message,
+        assistantContent: fullContent,
+        citations,
+        trace: searchTrace,
+      });
+
+      const archiveId = uuidv4();
+      const archiveConv = {
+        id: archiveId,
+        conversation_id: convId,
+        created_at: new Date().toISOString(),
+        steps: [
+          {
+            id: uuidv4(),
+            type: 'user_input',
+            title: 'User Input',
+            status: 'completed',
+            started_at: new Date().toISOString(),
+            finished_at: new Date().toISOString(),
+            summary: `User asked: "${message.slice(0, 100)}${message.length > 100 ? '...' : ''}"`,
+            details: { raw_question: message, wiki_scope: wiki_pages, pdf_page_range: pdf_pages },
+            related_files: raw_files,
+            related_pages: wiki_pages,
+          },
+          {
+            id: uuidv4(),
+            type: 'context_selection',
+            title: 'Context Selection',
+            status: 'completed',
+            started_at: new Date().toISOString(),
+            finished_at: new Date().toISOString(),
+            summary: `Used ${wikiContent.length} wiki context blocks, ${pdfContent.length} source blocks; auto retrieval ${searchTrace.auto_context_used ? 'enabled' : 'not used'}`,
+            details: {
+              wiki_pages_used: wiki_pages,
+              raw_files_used: raw_files,
+              pdf_ranges: pdf_pages,
+              citations,
+              search_trace: searchTrace,
+              evidence_pack_id: evidencePack?.id,
+              truncated: contextEstimate > MAX_CONTEXT,
+            },
+            related_files: citationRawPaths(citations),
+            related_pages: citationWikiPaths(citations),
+          },
+          {
+            id: uuidv4(),
+            type: 'model_analysis',
+            title: 'Model Analysis',
+            status: 'completed',
+            started_at: new Date().toISOString(),
+            finished_at: new Date().toISOString(),
+            summary: `Model: ${response.model}. Input: ~${Math.round(contextEstimate / 1000)}K chars. Output: ~${Math.round(fullContent.length / 1000)}K chars.`,
+            details: { model: response.model, input_estimate: contextEstimate, output_estimate: fullContent.length },
+            related_files: [],
+            related_pages: [],
+          },
+          {
+            id: uuidv4(),
+            type: 'review_status',
+            title: 'Review Status',
+            status: reviewItem ? 'pending' : 'completed',
+            started_at: new Date().toISOString(),
+            summary: reviewItem ? 'Automatic retrieval answer queued for manual Wiki review' : 'No automatic review item generated',
+            details: { needs_review: Boolean(reviewItem), review_item_id: reviewItem?.id },
+            related_files: citationRawPaths(citations),
+            related_pages: citationWikiPaths(citations),
+          },
+        ],
+        context_summary: `Wiki pages: ${citationWikiPaths(citations).join(', ') || 'none'}. Sources: ${citationRawPaths(citations).join(', ') || 'none'}`,
+        raw_files: citationRawPaths(citations),
+        wiki_pages: citationWikiPaths(citations),
+        pdf_refs: citationPdfRefs(citations),
+        search_trace: searchTrace,
+        model_runs: [{
+          model: response.model,
+          input_estimate: contextEstimate,
+          output_estimate: fullContent.length,
+        }],
+        update_proposals: [],
+        review_items: reviewItem ? [reviewItem.id] : [],
+        writeback_status: 'not_applied',
+        generated_prompt: '',
+      };
+
+      archiveStore.update((d) => {
+        d.archives.push(archiveConv);
         return d;
       });
 
-      sendSSE('done', { message: assistantMsg, message_id: assistantMsg.id, full_content: fullContent });
+      const convData = conversationStore.update((d) => {
+        const idx = d.conversations.findIndex((c: any) => c.id === convId);
+        if (idx >= 0) {
+          d.conversations[idx] = applyConversationContextMetadata(d.conversations[idx] as any, message, citations);
+        }
+        return d;
+      });
+      const updatedConversation = convData.conversations.find((c: any) => c.id === convId);
+
+      sendSSE('done', {
+        message: assistantMsg,
+        conversation: updatedConversation,
+        message_id: assistantMsg.id,
+        full_content: fullContent,
+        archive_id: archiveId,
+        search_trace: searchTrace,
+      });
       res.end();
     } catch (err: any) {
       conversationStore.update((d) => {
@@ -682,6 +862,49 @@ app.post('/api/conversations/:id/archive', (req, res) => {
   } else {
     res.status(404).json({ error: 'No archive found' });
   }
+});
+
+// ============================================================
+// Retrieval Evidence
+// ============================================================
+app.get('/api/research-runs', (req, res) => {
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit || '100'), 10) || 100, 1), 500);
+  const query = String(req.query.q || '').trim().toLowerCase();
+  const runs = researchRunStore.read().research_runs
+    .filter((run: any) => {
+      if (!query) return true;
+      return String(run.query || '').toLowerCase().includes(query) ||
+        String(run.normalized_query || '').toLowerCase().includes(query) ||
+        (run.extracted_terms || []).some((term: string) => String(term).toLowerCase().includes(query));
+    })
+    .slice(0, limit);
+  res.json(runs);
+});
+
+app.get('/api/research-runs/:id', (req, res) => {
+  const run = researchRunStore.read().research_runs.find((item: any) => item.id === req.params.id);
+  if (!run) return res.status(404).json({ error: 'Research run not found' });
+  res.json(run);
+});
+
+app.get('/api/evidence-packs', (req, res) => {
+  const limit = Math.min(Math.max(parseInt(String(req.query.limit || '100'), 10) || 100, 1), 500);
+  const query = String(req.query.q || '').trim().toLowerCase();
+  const packs = evidencePackStore.read().evidence_packs
+    .filter((pack: any) => {
+      if (!query) return true;
+      return String(pack.topic_key || '').toLowerCase().includes(query) ||
+        String(pack.query || '').toLowerCase().includes(query) ||
+        String(pack.normalized_query || '').toLowerCase().includes(query);
+    })
+    .slice(0, limit);
+  res.json(packs);
+});
+
+app.get('/api/evidence-packs/:id', (req, res) => {
+  const pack = evidencePackStore.read().evidence_packs.find((item: any) => item.id === req.params.id);
+  if (!pack) return res.status(404).json({ error: 'Evidence pack not found' });
+  res.json(pack);
 });
 
 // ============================================================
@@ -845,10 +1068,10 @@ app.get('/api/pdf/:id/file', (req, res) => {
 // ============================================================
 app.post('/api/check', (_req, res) => {
   try {
-    const scriptsDir = path.resolve(import.meta.dirname, '..', '..', 'scripts');
+    const scriptsDir = path.resolve(MODULE_DIR, '..', '..', 'scripts');
     execSync(
       `npx tsx ${path.join(scriptsDir, 'check-wiki-health.ts')}`,
-      { encoding: 'utf-8', timeout: 30000, cwd: path.resolve(import.meta.dirname, '..', '..') }
+      { encoding: 'utf-8', timeout: 30000, cwd: path.resolve(MODULE_DIR, '..', '..') }
     );
     const result = getCheckResult();
     res.json(result);
@@ -955,7 +1178,7 @@ app.post('/api/prompt/generate', (req, res) => {
 // ============================================================
 // Static files for frontend (production)
 // ============================================================
-const frontendDist = path.resolve(import.meta.dirname, '..', '..', 'frontend', 'dist');
+const frontendDist = path.resolve(MODULE_DIR, '..', '..', 'frontend', 'dist');
 if (fs.existsSync(frontendDist)) {
   app.use(express.static(frontendDist));
   app.get('*', (_req, res) => {

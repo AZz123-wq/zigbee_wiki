@@ -16,7 +16,7 @@ export interface Conversation {
   archived: boolean;
   related_raw_files: string[];
   related_wiki_pages: string[];
-  related_pdf_pages: string[];
+  related_pdf_pages: { path: string; pages: number[] }[];
   last_summary: string;
 }
 
@@ -24,10 +24,13 @@ export interface Conversation {
 export type MessageRole = 'user' | 'assistant' | 'system' | 'tool' | 'status';
 
 export interface Citation {
-  type: 'wiki' | 'raw' | 'pdf';
+  type: 'wiki' | 'raw' | 'pdf' | 'evidence';
   title: string;
   path: string;
   pages?: number[];
+  source_id?: string;
+  evidence_pack_id?: string;
+  score?: number;
 }
 
 export interface Message {
@@ -42,6 +45,13 @@ export interface Message {
   related_pdf_pages?: { path: string; pages: number[] }[];
   model?: string;
   token_estimate?: number;
+  search_trace?: {
+    auto_context_used?: boolean;
+    selected_wiki_pages?: string[];
+    selected_source_chunks?: unknown[];
+    selected_pdf_pages?: { path: string; pages: number[] }[];
+    selected_evidence_packs?: string[];
+  };
 }
 
 // --- Archive ---

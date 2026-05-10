@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Settings,
   PanelLeftClose,
+  Database,
 } from 'lucide-react';
 
 export default function Sidebar() {
@@ -33,6 +34,7 @@ export default function Sidebar() {
 
   const navItems = [
     { icon: FileText, label: 'Raw 文件', path: '/raw' },
+    { icon: Database, label: '检索记录', path: '/retrieval' },
     { icon: ClipboardCheck, label: '审查队列', path: '/review' },
     { icon: ShieldCheck, label: '检查 Wiki', path: '/check' },
   ];

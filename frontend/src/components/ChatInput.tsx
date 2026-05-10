@@ -25,6 +25,7 @@ export default function ChatInput() {
     addConversation,
     setActiveConversation,
     setLoading,
+    updateConversation,
     clearContext,
     loading,
   } = useStore();
@@ -167,6 +168,15 @@ export default function ChatInput() {
                   : m
               ),
             }));
+          },
+          onConversationUpdate: (conversation) => {
+            if (!conversation?.id) return;
+            const exists = useStore.getState().conversations.some((c) => c.id === conversation.id);
+            if (exists) {
+              updateConversation(conversation.id, conversation);
+            } else {
+              addConversation(conversation);
+            }
           },
         }
       );

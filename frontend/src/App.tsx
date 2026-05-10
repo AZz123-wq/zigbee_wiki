@@ -12,6 +12,7 @@ import RawFilesPage from './pages/RawFilesPage';
 import ReviewPage from './pages/ReviewPage';
 import CheckPage from './pages/CheckPage';
 import SettingsPage from './pages/SettingsPage';
+import RetrievalPage from './pages/RetrievalPage';
 
 export default function App() {
   const { setConversations, setActiveConversation, setMessages, sidebarOpen } = useStore();
@@ -53,6 +54,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<ChatPage />} />
           <Route path="/raw" element={<RawFilesPage />} />
+          <Route path="/retrieval" element={<RetrievalPage />} />
           <Route path="/review" element={<ReviewPage />} />
           <Route path="/check" element={<CheckPage />} />
           <Route path="/settings" element={<SettingsPage />} />

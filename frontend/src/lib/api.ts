@@ -9,6 +9,7 @@ interface ChatStreamHandlers {
   onConversation?: (payload: any) => void;
   onUserMessage?: (message: any) => void;
   onAssistantMessage?: (message: any) => void;
+  onConversationUpdate?: (conversation: any) => void;
   onStatus?: (payload: { phase?: string; message?: string }) => void;
 }
 
@@ -105,6 +106,7 @@ export async function sendChatStream(
     }
     if (event === 'done') {
       if (parsed.message) handlers.onAssistantMessage?.(parsed.message);
+      if (parsed.conversation) handlers.onConversationUpdate?.(parsed.conversation);
       onDone(parsed.full_content || parsed.message?.content || '');
       return;
     }
@@ -135,6 +137,12 @@ export async function sendChatStream(
 
 // Archive
 export const getArchive = (convId: string) => request<any>(`/conversations/${convId}/archive`);
+
+// Retrieval evidence
+export const getResearchRuns = (q = '') =>
+  request<any[]>(`/research-runs${q ? `?q=${encodeURIComponent(q)}` : ''}`);
+export const getEvidencePacks = (q = '') =>
+  request<any[]>(`/evidence-packs${q ? `?q=${encodeURIComponent(q)}` : ''}`);
 
 // Raw files
 export const getRawFiles = () => request<any>('/raw');

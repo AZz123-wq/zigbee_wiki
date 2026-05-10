@@ -222,6 +222,18 @@ function main() {
           suggestion: `Check if the PDF is corrupted and re-upload if needed`,
           claude_prompt: `The PDF raw/${pdf.path} has no metadata. Please check if it's corrupted.`,
         });
+      } else if (pdf.metadata_status === 'needs_review') {
+        issues.push({
+          id: `issue-${++issueCounter}`,
+          type: 'pdf_metadata_needs_review',
+          severity: 'warning',
+          title: `PDF metadata needs review: ${pdf.filename}`,
+          message: `${pdf.pages} pages via ${pdf.page_count_source || 'unknown'}; warnings: ${(pdf.metadata_warnings || []).join('; ') || 'metadata mismatch'}`,
+          file: `raw/${pdf.path}`,
+          related_files: ['data/source-quality-report.json'],
+          suggestion: `Review page-count candidates and extraction quality before relying on page-specific citations`,
+          claude_prompt: `The PDF raw/${pdf.path} has metadata warnings. Review data/source-quality-report.json and verify page count/extraction quality.`,
+        });
       } else if (pdf.pages > 200) {
         issues.push({
           id: `issue-${++issueCounter}`,

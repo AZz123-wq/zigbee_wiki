@@ -5,9 +5,11 @@
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { fileURLToPath } from 'url';
 
 const MAX_PAGES_PER_READ = 5;
-const RAW_DIR = path.resolve(import.meta.dirname, '..', '..', 'raw');
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+const RAW_DIR = path.resolve(MODULE_DIR, '..', '..', 'raw');
 
 export interface PdfInfo {
   pages: number;

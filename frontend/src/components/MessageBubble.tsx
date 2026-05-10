@@ -29,6 +29,10 @@ const roleStyles: Record<string, string> = {
 export default function MessageBubble({ message }: Props) {
   const Icon = roleIcons[message.role] || Bot;
   const style = roleStyles[message.role] || roleStyles.assistant;
+  const autoSourceCount =
+    (message.search_trace?.selected_wiki_pages?.length || 0) +
+    (message.search_trace?.selected_source_chunks?.length || 0) +
+    (message.search_trace?.selected_evidence_packs?.length || 0);
 
   return (
     <div className={`message-enter flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
@@ -54,6 +58,12 @@ export default function MessageBubble({ message }: Props) {
             <p className="text-sm whitespace-pre-wrap">{message.content}</p>
           )}
 
+          {message.search_trace?.auto_context_used && (
+            <div className="mt-2 text-[11px] text-cyan-300">
+              自动检索到 {autoSourceCount} 个来源
+            </div>
+          )}
+
           {/* Citations */}
           {message.citations && message.citations.length > 0 && (
             <div className="mt-2 pt-2 border-t border-gray-700 flex flex-wrap gap-1.5">
@@ -65,6 +75,8 @@ export default function MessageBubble({ message }: Props) {
                       ? 'bg-emerald-600/20 text-emerald-300'
                       : cite.type === 'pdf'
                       ? 'bg-yellow-600/20 text-yellow-300'
+                      : cite.type === 'evidence'
+                      ? 'bg-cyan-600/20 text-cyan-300'
                       : 'bg-blue-600/20 text-blue-300'
                   }`}
                   title={`${cite.type}: ${cite.path}${cite.pages ? ` (p.${cite.pages.join(',')})` : ''}`}
@@ -72,6 +84,7 @@ export default function MessageBubble({ message }: Props) {
                   {cite.type === 'wiki' && 'W '}
                   {cite.type === 'pdf' && 'P '}
                   {cite.type === 'raw' && 'R '}
+                  {cite.type === 'evidence' && 'E '}
                   {cite.title.slice(0, 30)}
                   {cite.pages && ` p.${cite.pages.join(',')}`}
                 </span>
