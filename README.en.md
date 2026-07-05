@@ -45,12 +45,14 @@ npm ci
 (cd apps/frontend && npm ci)
 ```
 
-Prepare folders and API key:
+Prepare folders and environment file:
 
 ```bash
 mkdir -p knowledge/raw knowledge/wiki runtime/data
-export DEEPSEEK_API_KEY="your-api-key"
+cp .env.example .env.local
 ```
+
+Then open `.env.local` and fill in your own `DEEPSEEK_API_KEY`.
 
 Build indexes:
 
@@ -68,10 +70,12 @@ npm run workbench:start
 
 ## 🔐 Optional Login
 
+To enable login protection, update `.env.local`:
+
 ```bash
-export APP_AUTH_ENABLED=true
-export APP_ACCESS_PASSWORD_HASH="scrypt:<salt_b64url>:<hash_b64url>"
-export SESSION_SECRET="replace-with-a-long-random-string"
+APP_AUTH_ENABLED="true"
+APP_ACCESS_PASSWORD_HASH="scrypt:<salt_b64url>:<hash_b64url>"
+SESSION_SECRET="replace-with-a-long-random-string"
 ```
 
 ## 📁 Layout

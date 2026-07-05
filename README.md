@@ -45,12 +45,14 @@ npm ci
 (cd apps/frontend && npm ci)
 ```
 
-准备目录和 API Key：
+准备目录和环境文件：
 
 ```bash
 mkdir -p knowledge/raw knowledge/wiki runtime/data
-export DEEPSEEK_API_KEY="your-api-key"
+cp .env.example .env.local
 ```
+
+然后打开 `.env.local`，填写自己的 `DEEPSEEK_API_KEY`。
 
 生成索引：
 
@@ -68,10 +70,12 @@ npm run workbench:start
 
 ## 🔐 可选登录保护
 
+如需开启登录保护，在 `.env.local` 中改为：
+
 ```bash
-export APP_AUTH_ENABLED=true
-export APP_ACCESS_PASSWORD_HASH="scrypt:<salt_b64url>:<hash_b64url>"
-export SESSION_SECRET="replace-with-a-long-random-string"
+APP_AUTH_ENABLED="true"
+APP_ACCESS_PASSWORD_HASH="scrypt:<salt_b64url>:<hash_b64url>"
+SESSION_SECRET="replace-with-a-long-random-string"
 ```
 
 ## 📁 目录
