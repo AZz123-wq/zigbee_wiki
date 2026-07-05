@@ -14,9 +14,14 @@ import {
   Settings,
   PanelLeftClose,
   Database,
+  LogOut,
 } from 'lucide-react';
 
-export default function Sidebar() {
+interface Props {
+  onLogout?: () => void | Promise<void>;
+}
+
+export default function Sidebar({ onLogout }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
   const { toggleSidebar, setMessages } = useStore();
@@ -88,7 +93,7 @@ export default function Sidebar() {
       </div>
 
       {/* Settings */}
-      <div className="border-t border-gray-800 p-2">
+      <div className="border-t border-gray-800 p-2 flex flex-col gap-0.5">
         <button
           onClick={() => navigate('/settings')}
           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
@@ -100,6 +105,15 @@ export default function Sidebar() {
           <Settings size={16} />
           设置
         </button>
+        {onLogout && (
+          <button
+            onClick={() => onLogout()}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:bg-sidebar-hover hover:text-gray-200 transition-colors"
+          >
+            <LogOut size={16} />
+            退出
+          </button>
+        )}
       </div>
     </div>
   );

@@ -15,15 +15,22 @@ import { conversationStore, archiveStore, reviewStore, messageStore, researchRun
 import { getPdfInfo, readPdfPages, detectPdfRisk } from './pdfSafeReader.js';
 import { chat, chatStream, buildSystemPrompt } from './llmClient.js';
 import { buildChatContext, maybeSaveEvidencePack, saveResearchRun, type Citation, type SearchTrace } from './contextSearch.js';
+import { authRouter, requireAuth } from './auth.js';
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
+const HOST = process.env.HOST || '0.0.0.0';
 const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.resolve(MODULE_DIR, '..', '..', '..');
 
 // Middleware
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json({ limit: '5mb' }));
+
+app.get('/api/auth/status', authRouter.status);
+app.post('/api/auth/login', authRouter.login);
+app.post('/api/auth/logout', authRouter.logout);
+app.use('/api', requireAuth);
 
 // File upload config
 const RAW_DIR = path.join(ROOT_DIR, 'knowledge', 'raw');
@@ -1190,10 +1197,10 @@ if (fs.existsSync(frontendDist)) {
 // ============================================================
 // Start
 // ============================================================
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   console.log(`\n🔧 Wiki Chat Workbench Server`);
-  console.log(`   → http://localhost:${PORT}`);
-  console.log(`   → API: http://localhost:${PORT}/api/index/summary`);
+  console.log(`   → http://${HOST}:${PORT}`);
+  console.log(`   → API: http://${HOST}:${PORT}/api/index/summary`);
   console.log(`   → DEEPSEEK_API_KEY: ${process.env.DEEPSEEK_API_KEY ? '✅ configured' : '❌ not set'}`);
   console.log();
 });

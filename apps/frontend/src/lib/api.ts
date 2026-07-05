@@ -5,6 +5,22 @@
 
 const BASE = '/api';
 
+let unauthorizedHandler: (() => void) | null = null;
+
+export class ApiError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
+export function setUnauthorizedHandler(handler: (() => void) | null) {
+  unauthorizedHandler = handler;
+}
+
 interface ChatStreamHandlers {
   onConversation?: (payload: any) => void;
   onUserMessage?: (message: any) => void;
@@ -13,17 +29,39 @@ interface ChatStreamHandlers {
   onStatus?: (payload: { phase?: string; message?: string }) => void;
 }
 
+async function readError(res: Response) {
+  const err = await res.json().catch(() => ({ error: res.statusText }));
+  return err.error || `HTTP ${res.status}`;
+}
+
+function handleUnauthorized(status: number) {
+  if (status === 401) {
+    unauthorizedHandler?.();
+  }
+}
+
 async function request<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${url}`, {
-    headers: { 'Content-Type': 'application/json', ...options?.headers },
     ...options,
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    handleUnauthorized(res.status);
+    throw new ApiError(await readError(res), res.status);
   }
   return res.json();
 }
+
+// Auth
+export const getAuthStatus = () => request<{ authenticated: boolean }>('/auth/status');
+export const login = (password: string) =>
+  request<{ authenticated: boolean }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  });
+export const logout = () =>
+  request<{ authenticated: boolean }>('/auth/logout', { method: 'POST' });
 
 // Index
 export const getIndexSummary = () => request<any>('/index/summary');
@@ -51,14 +89,15 @@ export async function sendChatStream(
 ): Promise<void> {
   const res = await fetch(`${BASE}/chat/stream`, {
     method: 'POST',
+    credentials: 'same-origin',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
     signal,
   });
 
   if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Stream failed' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+    handleUnauthorized(res.status);
+    throw new ApiError(await readError(res), res.status);
   }
 
   const reader = res.body?.getReader();
@@ -149,7 +188,17 @@ export const getRawFiles = () => request<any>('/raw');
 export const uploadRawFile = (file: File) => {
   const formData = new FormData();
   formData.append('file', file);
-  return fetch(`${BASE}/raw/upload`, { method: 'POST', body: formData }).then((r) => r.json());
+  return fetch(`${BASE}/raw/upload`, {
+    method: 'POST',
+    body: formData,
+    credentials: 'same-origin',
+  }).then(async (res) => {
+    if (!res.ok) {
+      handleUnauthorized(res.status);
+      throw new ApiError(await readError(res), res.status);
+    }
+    return res.json();
+  });
 };
 export const getRawFile = (id: string) => request<any>(`/raw/${id}`);
 export const getRawPreview = (id: string) => request<any>(`/raw/${id}/preview`);

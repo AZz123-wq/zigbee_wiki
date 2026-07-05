@@ -1,7 +1,12 @@
+.env*
+!.env.example
+.workbench/
+runtime/data/*
+!runtime/data/.gitkeep
+runtime/outputs/
+knowledge/
 node_modules/
 dist/
-.env
-.env.local
-.workbench/
+apps/**/dist/
 *.log
 *.tsbuildinfo
