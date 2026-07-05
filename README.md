@@ -1,42 +1,43 @@
-# Zigbee Wiki Chat Workbench 📚💬
+# Zigbee Wiki Assistant 📚💬
 
-> 中文：一个本地优先的 Zigbee 知识库聊天工作台，用 React 前端 + Express 后端浏览、检索和问答自己的 Wiki 资料。  
-> English: A local-first Zigbee wiki chat workbench for browsing, searching, and chatting with your own knowledge base.
+<p align="right">
+  <a href="./README.en.md">
+    <img src="https://img.shields.io/badge/English-README-blue?style=for-the-badge" alt="English README">
+  </a>
+</p>
 
-This public repo contains **application code only**. It intentionally does not include private knowledge files, API keys, environment files, or runtime JSON data.
+一个用于整理 Zigbee 资料、生成索引，并通过网页界面进行检索、问答和审查的小型知识工作台。
 
-本公开仓库只包含**应用代码**，不包含私有知识库资料、API Key、环境变量文件或运行数据 JSON。
+## ✨ 功能
 
-## ✨ Features / 功能
+- 🔎 资料检索：从 Wiki 页面和原始文档生成可查询索引
+- 💬 智能问答：在聊天界面中围绕资料提问
+- 🧭 证据追踪：查看检索来源、引用和上下文
+- 🗂 审查归档：整理研究过程、待复核条目和归档记录
+- 🔐 访问口令：可按需开启简单登录保护
 
-- 🔎 **Knowledge search / 知识检索**: index local wiki pages and raw documents.
-- 💬 **Chat UI / 聊天界面**: ChatGPT-style workspace for asking questions.
-- 🧭 **Evidence workflow / 证据流程**: retrieval traces, review queues, and archives.
-- 🔐 **Optional password gate / 可选访问口令**: enable with environment variables.
-- 🧹 **Public-safe defaults / 默认适合公开仓库**: local data and secrets are ignored by Git.
-
-## 🧭 Flow / 流程
+## 🧭 流程图
 
 ```mermaid
 flowchart LR
-  A[📄 Local docs<br/>knowledge/raw] --> B[🧱 Build indexes<br/>npm run reindex]
-  B --> C[(🗂 Local JSON<br/>runtime/data)]
-  B --> D[⚙️ Express API<br/>apps/server]
-  D --> E[🖥 React UI<br/>apps/frontend]
-  E --> F[💬 Chat / Search / Review]
-  F --> D
+  A[📄 原始资料<br/>knowledge/raw] --> C[🧱 生成索引<br/>npm run reindex]
+  B[📝 Wiki 页面<br/>knowledge/wiki] --> C
+  C --> D[(🗂 索引与状态<br/>runtime/data)]
+  D --> E[⚙️ 后端 API<br/>apps/server]
+  E --> F[🖥 前端界面<br/>apps/frontend]
+  F --> G[💬 检索 / 问答 / 审查]
+  G --> E
 ```
 
-## 🧰 Stack / 技术栈
+## 🧰 技术栈
 
-- Frontend: React, Vite, Tailwind CSS, Zustand
-- Backend: Express, TypeScript, local JSON storage
-- Tools: TypeScript scripts for indexing and wiki health checks
-- LLM: DeepSeek-compatible API key via environment variable
+- 前端：React、Vite、Tailwind CSS、Zustand
+- 后端：Express、TypeScript
+- 工具：TypeScript 脚本生成索引和检查 Wiki 健康状态
 
-## 🚀 Quick Start / 快速开始
+## 🚀 快速开始
 
-Install dependencies:
+安装依赖：
 
 ```bash
 npm ci
@@ -44,14 +45,28 @@ npm ci
 (cd apps/frontend && npm ci)
 ```
 
-Add your local-only folders and secrets:
+准备目录和 API Key：
 
 ```bash
 mkdir -p knowledge/raw knowledge/wiki runtime/data
 export DEEPSEEK_API_KEY="your-api-key"
 ```
 
-Optional password protection:
+生成索引：
+
+```bash
+npm run reindex
+```
+
+启动工作台：
+
+```bash
+npm run workbench:start
+# 前端：http://localhost:5173
+# 后端：http://localhost:3001
+```
+
+## 🔐 可选登录保护
 
 ```bash
 export APP_AUTH_ENABLED=true
@@ -59,48 +74,21 @@ export APP_ACCESS_PASSWORD_HASH="scrypt:<salt_b64url>:<hash_b64url>"
 export SESSION_SECRET="replace-with-a-long-random-string"
 ```
 
-Start the workbench:
+## 📁 目录
+
+- `apps/server/`：后端 API 和数据读写
+- `apps/frontend/`：前端界面
+- `tools/scripts/`：索引生成和检查脚本
+- `knowledge/`：资料和 Wiki 页面
+- `runtime/data/`：索引、对话、归档和审查数据
+
+## 🧪 常用命令
 
 ```bash
-npm run workbench:start
-# Frontend: http://localhost:5173
-# Backend:  http://localhost:3001
-```
+npm run reindex           # 重新生成索引并检查
+npm run workbench:status  # 查看运行状态
+npm run workbench:stop    # 停止本地服务
 
-Build both apps:
-
-```bash
 (cd apps/server && npm run build)
 (cd apps/frontend && npm run build)
 ```
-
-## 📁 Layout / 目录
-
-- `apps/server/`: Express API and local data access.
-- `apps/frontend/`: React UI.
-- `tools/scripts/`: indexing and health-check scripts.
-- `knowledge/`: your local corpus, ignored by Git.
-- `runtime/data/`: generated indexes and app state, ignored except `.gitkeep`.
-- `.workbench/`: local process files and logs, ignored by Git.
-
-## 🧪 Useful Commands / 常用命令
-
-```bash
-npm run reindex           # rebuild wiki/source indexes and run checks
-npm run workbench:status  # show local server/frontend status
-npm run workbench:stop    # stop local processes
-```
-
-## 🔒 Public Repo Safety / 公开仓库安全
-
-The repository is configured to keep these out of Git:
-
-- `.env*` files, except a future `.env.example`
-- `knowledge/` private corpus
-- `runtime/data/*.json` runtime data
-- `.workbench/` logs and pid files
-- `node_modules/`, `dist/`, logs, and TypeScript build info
-
-Do not commit real API keys, passwords, generated runtime data, or private documents.
-
-请不要提交真实 API Key、访问口令、运行数据或私有文档。
