@@ -350,6 +350,7 @@ export function buildChatContext(params: {
   raw_files?: string[];
   pdf_pages?: any[];
   allowAuto?: boolean;
+  allowEvidencePacks?: boolean;
 }): ContextBuildResult {
   const manualWikiPages = params.wiki_pages || [];
   const manualRawFiles = params.raw_files || [];
@@ -371,7 +372,7 @@ export function buildChatContext(params: {
     return { wikiContent, pdfContent, citations, trace };
   }
 
-  const evidencePacks = findEvidencePacks(params.query, terms);
+  const evidencePacks = params.allowEvidencePacks === false ? [] : findEvidencePacks(params.query, terms);
   for (const pack of evidencePacks) {
     trace.selected_evidence_packs.push(pack.id);
     const snippets = Array.isArray(pack.snippets) ? pack.snippets.join('\n\n') : pack.summary || '';

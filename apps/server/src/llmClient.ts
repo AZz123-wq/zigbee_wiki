@@ -4,9 +4,17 @@
  */
 import { execFile, spawn } from 'child_process';
 
-const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || '';
-const ANTHROPIC_BASE_URL = process.env.ANTHROPIC_BASE_URL || 'https://api.deepseek.com/v1';
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'deepseek-chat';
+function getDeepSeekApiKey() {
+  return process.env.DEEPSEEK_API_KEY || '';
+}
+
+function getBaseUrl() {
+  return process.env.ANTHROPIC_BASE_URL || 'https://api.deepseek.com/v1';
+}
+
+function getModel() {
+  return process.env.ANTHROPIC_MODEL || 'deepseek-chat';
+}
 
 export interface ChatCompletionMessage {
   role: 'system' | 'user' | 'assistant';
@@ -17,6 +25,8 @@ export interface ChatParams {
   messages: ChatCompletionMessage[];
   temperature?: number;
   max_tokens?: number;
+  apiKey?: string;
+  allowEnvApiKeyFallback?: boolean;
 }
 
 export interface ChatResponse {
@@ -29,6 +39,18 @@ export interface ChatResponse {
 export interface ChatStreamParams extends ChatParams {
   onToken: (token: string) => void;
   onThinking?: () => void;
+}
+
+export type ApiKeyValidationFailure = 'unauthorized' | 'timeout' | 'network' | 'api' | 'invalid_response';
+
+export class ApiKeyValidationError extends Error {
+  kind: ApiKeyValidationFailure;
+
+  constructor(kind: ApiKeyValidationFailure, message: string) {
+    super(message);
+    this.name = 'ApiKeyValidationError';
+    this.kind = kind;
+  }
 }
 
 function extractChoiceText(choice: any): string {
@@ -120,14 +142,110 @@ function curlJson(url: string, body: object, apiKey: string, timeout = 45): Prom
   });
 }
 
+function curlJsonWithStatus(
+  url: string,
+  body: object,
+  apiKey: string,
+  timeout = 20,
+  headers: string[] = []
+): Promise<{ status: number; result: any }> {
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-sS', url,
+      '-H', 'Content-Type: application/json',
+      '-H', `Authorization: Bearer ${apiKey}`,
+      ...headers.flatMap((header) => ['-H', header]),
+      '-d', JSON.stringify(body),
+      '--max-time', String(timeout),
+      '-w', '\n%{http_code}',
+    ];
+
+    execFile('curl', args, { maxBuffer: 1024 * 1024 }, (err, stdout, stderr) => {
+      if (err) {
+        if ((err as any).code === 28 || (err as any).signal === 'SIGALRM') {
+          return reject(new ApiKeyValidationError('timeout', 'DeepSeek API 请求超时'));
+        }
+        return reject(new ApiKeyValidationError(
+          'network',
+          stderr?.trim() || err.message || '无法连接 DeepSeek API'
+        ));
+      }
+
+      const separator = stdout.lastIndexOf('\n');
+      const bodyText = separator >= 0 ? stdout.slice(0, separator) : '';
+      const statusText = separator >= 0 ? stdout.slice(separator + 1).trim() : stdout.trim();
+      const status = Number(statusText);
+      if (!Number.isFinite(status)) {
+        return reject(new ApiKeyValidationError('invalid_response', '无法读取 DeepSeek API 状态码'));
+      }
+
+      try {
+        resolve({ status, result: bodyText ? JSON.parse(bodyText) : {} });
+      } catch {
+        reject(new ApiKeyValidationError('invalid_response', '无法解析 DeepSeek API 响应'));
+      }
+    });
+  });
+}
+
+function extractApiError(result: any): string {
+  return result?.error?.message || result?.message || result?.error || '';
+}
+
+export async function validateDeepSeekApiKey(apiKey: string): Promise<void> {
+  const baseUrl = getBaseUrl();
+  const model = getModel();
+  const trimmedKey = apiKey.trim();
+
+  const body = isAnthropicEndpoint(baseUrl)
+    ? {
+        model,
+        messages: [{ role: 'user', content: 'ping' }],
+        max_tokens: 1,
+        stream: false,
+      }
+    : {
+        model,
+        messages: [{ role: 'user', content: 'ping' }],
+        temperature: 0,
+        max_tokens: 1,
+        stream: false,
+      };
+
+  const { status, result } = await curlJsonWithStatus(
+    isAnthropicEndpoint(baseUrl) ? anthropicUrl(baseUrl) : `${baseUrl.replace(/\/$/, '')}/chat/completions`,
+    body,
+    trimmedKey,
+    20,
+    isAnthropicEndpoint(baseUrl) ? ['anthropic-version: 2023-06-01'] : []
+  );
+
+  if (status === 401 || status === 403) {
+    throw new ApiKeyValidationError('unauthorized', 'DeepSeek API Key 无效或没有访问权限');
+  }
+  if (status < 200 || status >= 300) {
+    throw new ApiKeyValidationError('api', extractApiError(result) || `DeepSeek API 返回 HTTP ${status}`);
+  }
+  if (result?.error) {
+    throw new ApiKeyValidationError('api', extractApiError(result) || 'DeepSeek API 返回错误');
+  }
+
+  const validShape = isAnthropicEndpoint(baseUrl)
+    ? Array.isArray(result?.content)
+    : Array.isArray(result?.choices);
+  if (!validShape) {
+    throw new ApiKeyValidationError('invalid_response', 'DeepSeek API 响应格式异常');
+  }
+}
+
 export async function chat(params: ChatParams): Promise<ChatResponse> {
-  const apiKey = DEEPSEEK_API_KEY;
+  const apiKey = params.apiKey?.trim() || (params.allowEnvApiKeyFallback === false ? '' : getDeepSeekApiKey());
   if (!apiKey) {
     throw new Error('DEEPSEEK_API_KEY 未配置');
   }
 
-  const baseUrl = ANTHROPIC_BASE_URL;
-  const model = ANTHROPIC_MODEL;
+  const baseUrl = getBaseUrl();
+  const model = getModel();
 
   if (isAnthropicEndpoint(baseUrl)) {
     const anthropic = toAnthropicMessages(params.messages);
@@ -153,7 +271,7 @@ export async function chat(params: ChatParams): Promise<ChatResponse> {
   }
 
   const result = await curlJson(
-    `${baseUrl}/chat/completions`,
+    `${baseUrl.replace(/\/$/, '')}/chat/completions`,
     {
       model,
       messages: params.messages,
@@ -175,13 +293,13 @@ export async function chat(params: ChatParams): Promise<ChatResponse> {
 }
 
 export function chatStream(params: ChatStreamParams): Promise<ChatResponse> {
-  const apiKey = DEEPSEEK_API_KEY;
+  const apiKey = params.apiKey?.trim() || (params.allowEnvApiKeyFallback === false ? '' : getDeepSeekApiKey());
   if (!apiKey) {
     return Promise.reject(new Error('DEEPSEEK_API_KEY 未配置'));
   }
 
-  const baseUrl = ANTHROPIC_BASE_URL;
-  const model = ANTHROPIC_MODEL;
+  const baseUrl = getBaseUrl();
+  const model = getModel();
   if (isAnthropicEndpoint(baseUrl)) {
     return chatAnthropicStream(baseUrl, model, apiKey, params);
   }
@@ -198,7 +316,7 @@ export function chatStream(params: ChatStreamParams): Promise<ChatResponse> {
     const args = [
       '-sS',
       '-N',
-      `${baseUrl}/chat/completions`,
+      `${baseUrl.replace(/\/$/, '')}/chat/completions`,
       '-H',
       'Content-Type: application/json',
       '-H',

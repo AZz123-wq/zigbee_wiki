@@ -19,7 +19,7 @@ class JsonStore<T> {
   private filePath: string;
   private cache: T | null = null;
 
-  constructor(filename: string, private defaultValue: T) {
+  constructor(filename: string, private defaultValue: T, private fileMode?: number) {
     this.filePath = path.join(DATA_DIR, filename);
   }
 
@@ -40,7 +40,8 @@ class JsonStore<T> {
     this.cache = data;
     fs.mkdirSync(DATA_DIR, { recursive: true });
     const store: StoreFile<T> = { data, _updated_at: new Date().toISOString() };
-    fs.writeFileSync(this.filePath, JSON.stringify(store, null, 2));
+    fs.writeFileSync(this.filePath, JSON.stringify(store, null, 2), this.fileMode ? { mode: this.fileMode } : undefined);
+    if (this.fileMode) fs.chmodSync(this.filePath, this.fileMode);
   }
 
   update(updater: (data: T) => T): T {
@@ -76,12 +77,28 @@ export interface EvidencePackData {
   evidence_packs: Record<string, unknown>[];
 }
 
+export type AccessRole = 'admin' | 'user';
+
+export interface AccessUser {
+  id: string;
+  role: AccessRole;
+  password_hash: string;
+  api_key: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AccessUserData {
+  users: AccessUser[];
+}
+
 export const conversationStore = new JsonStore<ConvData>('conversations.json', { conversations: [] });
 export const archiveStore = new JsonStore<ArchiveData>('archives.json', { archives: [] });
 export const reviewStore = new JsonStore<ReviewData>('review-items.json', { review_items: [] });
 export const messageStore = new JsonStore<MessageData>('messages.json', { messages: [] });
 export const researchRunStore = new JsonStore<ResearchRunData>('research-runs.json', { research_runs: [] });
 export const evidencePackStore = new JsonStore<EvidencePackData>('evidence-packs.json', { evidence_packs: [] });
+export const accessUserStore = new JsonStore<AccessUserData>('access-users.json', { users: [] }, 0o600);
 
 export function getCheckResult(): Record<string, unknown> | null {
   const checkPath = path.join(DATA_DIR, 'check-results.json');

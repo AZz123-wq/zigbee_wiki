@@ -3,6 +3,7 @@
  * Main Express server for Wiki Chat Workbench
  */
 import express from 'express';
+import type { Request } from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
@@ -29,6 +30,7 @@ app.use(express.json({ limit: '5mb' }));
 
 app.get('/api/auth/status', authRouter.status);
 app.post('/api/auth/login', authRouter.login);
+app.post('/api/auth/register', authRouter.register);
 app.post('/api/auth/logout', authRouter.logout);
 app.use('/api', requireAuth);
 
@@ -70,6 +72,57 @@ function citationWikiPaths(citations: Citation[]): string[] {
   return uniqueStrings(citations
     .filter((citation) => citation.type === 'wiki')
     .map((citation) => citation.path));
+}
+
+function isAdminRequest(req: Request) {
+  return req.user?.role === 'admin';
+}
+
+function requestApiKey(req: Request) {
+  if (req.user?.role === 'user') return req.user.api_key || '';
+  return req.user?.api_key || process.env.DEEPSEEK_API_KEY || '';
+}
+
+function createConversationRecord(params: {
+  id?: string;
+  title: string;
+  wiki_pages?: string[];
+  raw_files?: string[];
+  pdf_pages?: unknown[];
+  transient?: boolean;
+}) {
+  return {
+    id: params.id || uuidv4(),
+    title: params.title || 'New Chat',
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    status: 'active',
+    message_count: 0,
+    has_raw: (params.raw_files || []).length > 0,
+    has_pdf: (params.pdf_pages || []).length > 0,
+    has_wiki_update: false,
+    archived: false,
+    related_raw_files: params.raw_files || [],
+    related_wiki_pages: params.wiki_pages || [],
+    related_pdf_pages: params.pdf_pages || [],
+    last_summary: '',
+    ...(params.transient ? { transient: true } : {}),
+  };
+}
+
+function sanitizeTransientMessages(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((message: any) =>
+      (message?.role === 'user' || message?.role === 'assistant') &&
+      typeof message?.content === 'string' &&
+      message.content.trim()
+    )
+    .slice(-10)
+    .map((message: any) => ({
+      role: message.role as 'user' | 'assistant',
+      content: message.content.slice(0, 12000),
+    }));
 }
 
 function createAutoReviewItem(params: {
@@ -134,11 +187,11 @@ function applyConversationContextMetadata(c: Record<string, any>, message: strin
 // ============================================================
 // Index Summary
 // ============================================================
-app.get('/api/index/summary', (_req, res) => {
+app.get('/api/index/summary', (req, res) => {
   const wikiIndex = getWikiIndex();
   const sourceIndex = getSourceIndex();
-  const conversations = conversationStore.read().conversations;
-  const reviews = reviewStore.read().review_items;
+  const conversations = isAdminRequest(req) ? conversationStore.read().conversations : [];
+  const reviews = isAdminRequest(req) ? reviewStore.read().review_items : [];
   const checkResult = getCheckResult();
 
   res.json({
@@ -155,28 +208,22 @@ app.get('/api/index/summary', (_req, res) => {
 // ============================================================
 // Conversations
 // ============================================================
-app.get('/api/conversations', (_req, res) => {
+app.get('/api/conversations', (req, res) => {
+  if (!isAdminRequest(req)) return res.json([]);
   const data = conversationStore.read();
   res.json(data.conversations);
 });
 
-app.post('/api/conversations', (_req, res) => {
-  const conv = {
-    id: uuidv4(),
-    title: 'New Chat',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    status: 'active',
-    message_count: 0,
-    has_raw: false,
-    has_pdf: false,
-    has_wiki_update: false,
-    archived: false,
-    related_raw_files: [],
-    related_wiki_pages: [],
-    related_pdf_pages: [],
-    last_summary: '',
-  };
+app.post('/api/conversations', (req, res) => {
+  if (!isAdminRequest(req)) {
+    return res.status(201).json(createConversationRecord({
+      id: `transient-${uuidv4()}`,
+      title: 'New Chat',
+      transient: true,
+    }));
+  }
+
+  const conv = createConversationRecord({ title: 'New Chat' });
   conversationStore.update((d) => {
     d.conversations.unshift(conv);
     return d;
@@ -185,6 +232,7 @@ app.post('/api/conversations', (_req, res) => {
 });
 
 app.get('/api/conversations/:id', (req, res) => {
+  if (!isAdminRequest(req)) return res.status(404).json({ error: 'Conversation not found' });
   const data = conversationStore.read();
   const conv = data.conversations.find((c: any) => c.id === req.params.id);
   if (!conv) return res.status(404).json({ error: 'Conversation not found' });
@@ -197,6 +245,7 @@ app.get('/api/conversations/:id', (req, res) => {
 });
 
 app.patch('/api/conversations/:id', (req, res) => {
+  if (!isAdminRequest(req)) return res.status(404).json({ error: 'Not found' });
   const { title, status, archived } = req.body;
   const conv = conversationStore.update((d) => {
     const idx = d.conversations.findIndex((c: any) => c.id === req.params.id);
@@ -215,6 +264,7 @@ app.patch('/api/conversations/:id', (req, res) => {
 });
 
 app.delete('/api/conversations/:id', (req, res) => {
+  if (!isAdminRequest(req)) return res.status(404).json({ error: 'Not found' });
   conversationStore.update((d) => ({
     conversations: d.conversations.filter((c: any) => c.id !== req.params.id),
   }));
@@ -236,36 +286,37 @@ app.post('/api/chat', async (req, res) => {
       wiki_pages = [],
       raw_files = [],
       pdf_pages = [],
+      transient_messages = [],
     } = req.body;
+    const adminRequest = isAdminRequest(req);
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    let convId = conversation_id;
+    let convId = adminRequest
+      ? conversation_id
+      : (typeof conversation_id === 'string' && conversation_id.startsWith('transient-') ? conversation_id : '');
+    let transientConversation: Record<string, unknown> | null = null;
 
     // Auto-create conversation if not provided
     if (!convId) {
-      const conv = {
-        id: uuidv4(),
+      const conv = createConversationRecord({
+        id: adminRequest ? undefined : `transient-${uuidv4()}`,
         title: message.slice(0, 50),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        status: 'active',
-        message_count: 0,
-        has_raw: raw_files.length > 0,
-        has_pdf: pdf_pages.length > 0,
-        has_wiki_update: false,
-        archived: false,
-        related_raw_files: raw_files || [],
-        related_wiki_pages: wiki_pages || [],
-        related_pdf_pages: pdf_pages || [],
-        last_summary: '',
-      };
-      conversationStore.update((d) => {
-        d.conversations.unshift(conv);
-        return d;
+        raw_files,
+        wiki_pages,
+        pdf_pages,
+        transient: !adminRequest,
       });
+      if (adminRequest) {
+        conversationStore.update((d) => {
+          d.conversations.unshift(conv);
+          return d;
+        });
+      } else {
+        transientConversation = conv;
+      }
       convId = conv.id;
     }
 
@@ -278,10 +329,12 @@ app.post('/api/chat', async (req, res) => {
       created_at: new Date().toISOString(),
       related_files: raw_files,
     };
-    messageStore.update((d) => {
-      d.messages.push(userMsg);
-      return d;
-    });
+    if (adminRequest) {
+      messageStore.update((d) => {
+        d.messages.push(userMsg);
+        return d;
+      });
+    }
 
     // Load manual context and append high-confidence automatic retrieval.
     let {
@@ -295,16 +348,19 @@ app.post('/api/chat', async (req, res) => {
       raw_files,
       pdf_pages,
       allowAuto: true,
+      allowEvidencePacks: adminRequest,
     });
 
     // Build chat messages
     const systemPrompt = buildSystemPrompt(wikiContent, pdfContent);
 
-    const previousMessages = messageStore.read().messages
-      .filter((m: any) => m.conversation_id === convId)
-      .filter((m: any) => m.id !== userMsg.id)
-      .slice(-10) // last 10 messages for context
-      .map((m: any) => ({ role: m.role, content: m.content }));
+    const previousMessages = adminRequest
+      ? messageStore.read().messages
+          .filter((m: any) => m.conversation_id === convId)
+          .filter((m: any) => m.id !== userMsg.id)
+          .slice(-10) // last 10 messages for context
+          .map((m: any) => ({ role: m.role, content: m.content }))
+      : sanitizeTransientMessages(transient_messages);
 
     const chatMessages = [
       { role: 'system' as const, content: systemPrompt },
@@ -338,12 +394,14 @@ app.post('/api/chat', async (req, res) => {
         messages: chatMessages,
         temperature: 0.7,
         max_tokens: 4096,
+        apiKey: requestApiKey(req),
+        allowEnvApiKeyFallback: adminRequest,
       });
       assistantContent = response.content;
       modelName = response.model;
     } catch (err: any) {
       errorMsg = `LLM call failed: ${err.message}`;
-      assistantContent = `Sorry, I encountered an error: ${err.message}\n\nPlease check that your API key is configured correctly in the DEEPSEEK_API_KEY environment variable.`;
+      assistantContent = `Sorry, I encountered an error: ${err.message}\n\nPlease check that your DeepSeek API Key is configured correctly.`;
     }
 
     // Save assistant message
@@ -359,10 +417,33 @@ app.post('/api/chat', async (req, res) => {
       model: modelName,
       token_estimate: contextEstimate,
     };
-    messageStore.update((d) => {
-      d.messages.push(assistantMsg);
-      return d;
-    });
+    if (adminRequest) {
+      messageStore.update((d) => {
+        d.messages.push(assistantMsg);
+        return d;
+      });
+    }
+
+    if (!adminRequest) {
+      const conversation = applyConversationContextMetadata(
+        (transientConversation || createConversationRecord({
+          id: convId,
+          title: message.slice(0, 50),
+          raw_files,
+          wiki_pages,
+          pdf_pages,
+          transient: true,
+        })) as Record<string, any>,
+        message,
+        citations
+      );
+      return res.json({
+        message: assistantMsg,
+        conversation,
+        archive_id: null,
+        update_proposals: [],
+      });
+    }
 
     saveResearchRun(searchTrace, {
       conversation_id: convId,
@@ -548,7 +629,9 @@ app.post('/api/chat/stream', async (req, res) => {
       wiki_pages = [],
       raw_files = [],
       pdf_pages = [],
+      transient_messages = [],
     } = req.body;
+    const adminRequest = isAdminRequest(req);
 
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return res.status(400).json({ error: 'Message is required' });
@@ -571,29 +654,25 @@ app.post('/api/chat/stream', async (req, res) => {
       sendSSE('status', { phase: 'thinking', message: '正在思考...' });
     };
 
-    let convId = conversation_id;
+    let convId = adminRequest
+      ? conversation_id
+      : (typeof conversation_id === 'string' && conversation_id.startsWith('transient-') ? conversation_id : '');
     let createdConversation: Record<string, unknown> | null = null;
     if (!convId) {
-      const conv = {
-        id: uuidv4(),
+      const conv = createConversationRecord({
+        id: adminRequest ? undefined : `transient-${uuidv4()}`,
         title: message.slice(0, 50),
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        status: 'active',
-        message_count: 0,
-        has_raw: raw_files.length > 0,
-        has_pdf: pdf_pages.length > 0,
-        has_wiki_update: false,
-        archived: false,
-        related_raw_files: raw_files || [],
-        related_wiki_pages: wiki_pages || [],
-        related_pdf_pages: pdf_pages || [],
-        last_summary: '',
-      };
-      conversationStore.update((d) => {
-        d.conversations.unshift(conv);
-        return d;
+        raw_files,
+        wiki_pages,
+        pdf_pages,
+        transient: !adminRequest,
       });
+      if (adminRequest) {
+        conversationStore.update((d) => {
+          d.conversations.unshift(conv);
+          return d;
+        });
+      }
       convId = conv.id;
       createdConversation = conv;
     }
@@ -606,10 +685,12 @@ app.post('/api/chat/stream', async (req, res) => {
       content: message,
       created_at: new Date().toISOString(),
     };
-    messageStore.update((d) => {
-      d.messages.push(userMsg);
-      return d;
-    });
+    if (adminRequest) {
+      messageStore.update((d) => {
+        d.messages.push(userMsg);
+        return d;
+      });
+    }
 
     sendSSE('conv_id', { conversation_id: convId, conversation: createdConversation });
     sendSSE('user_msg', userMsg);
@@ -626,15 +707,18 @@ app.post('/api/chat/stream', async (req, res) => {
       raw_files,
       pdf_pages,
       allowAuto: true,
+      allowEvidencePacks: adminRequest,
     });
 
     const systemPrompt = buildSystemPrompt(wikiContent, pdfContent);
 
-    const previousMessages = messageStore.read().messages
-      .filter((m: any) => m.conversation_id === convId)
-      .filter((m: any) => m.id !== userMsg.id)
-      .slice(-10)
-      .map((m: any) => ({ role: m.role, content: m.content }));
+    const previousMessages = adminRequest
+      ? messageStore.read().messages
+          .filter((m: any) => m.conversation_id === convId)
+          .filter((m: any) => m.id !== userMsg.id)
+          .slice(-10)
+          .map((m: any) => ({ role: m.role, content: m.content }))
+      : sanitizeTransientMessages(transient_messages);
 
     const chatMessages = [
       { role: 'system' as const, content: systemPrompt },
@@ -658,6 +742,8 @@ app.post('/api/chat/stream', async (req, res) => {
         messages: chatMessages,
         temperature: 0.7,
         max_tokens: 4096,
+        apiKey: requestApiKey(req),
+        allowEnvApiKeyFallback: adminRequest,
         onToken: (content) => {
           fullContent += content;
           if (!res.writableEnded) {
@@ -684,10 +770,37 @@ app.post('/api/chat/stream', async (req, res) => {
         model: response.model,
         token_estimate: contextEstimate,
       };
-      messageStore.update((d) => {
-        d.messages.push(assistantMsg);
-        return d;
-      });
+      if (adminRequest) {
+        messageStore.update((d) => {
+          d.messages.push(assistantMsg);
+          return d;
+        });
+      }
+
+      if (!adminRequest) {
+        const transientConversation = applyConversationContextMetadata(
+          (createdConversation || createConversationRecord({
+            id: convId,
+            title: message.slice(0, 50),
+            raw_files,
+            wiki_pages,
+            pdf_pages,
+            transient: true,
+          })) as Record<string, any>,
+          message,
+          citations
+        );
+        sendSSE('done', {
+          message: assistantMsg,
+          conversation: transientConversation,
+          message_id: assistantMsg.id,
+          full_content: fullContent,
+          archive_id: null,
+          search_trace: searchTrace,
+        });
+        res.end();
+        return;
+      }
 
       saveResearchRun(searchTrace, {
         conversation_id: convId,
@@ -807,17 +920,19 @@ app.post('/api/chat/stream', async (req, res) => {
       });
       res.end();
     } catch (err: any) {
-      conversationStore.update((d) => {
-        const idx = d.conversations.findIndex((c: any) => c.id === convId);
-        if (idx >= 0) {
-          const c = d.conversations[idx] as Record<string, any>;
-          c.updated_at = new Date().toISOString();
-          c.message_count = Number(c.message_count ?? 0) + 1;
-          c.last_summary = message.slice(0, 100);
-          d.conversations[idx] = c;
-        }
-        return d;
-      });
+      if (adminRequest) {
+        conversationStore.update((d) => {
+          const idx = d.conversations.findIndex((c: any) => c.id === convId);
+          if (idx >= 0) {
+            const c = d.conversations[idx] as Record<string, any>;
+            c.updated_at = new Date().toISOString();
+            c.message_count = Number(c.message_count ?? 0) + 1;
+            c.last_summary = message.slice(0, 100);
+            d.conversations[idx] = c;
+          }
+          return d;
+        });
+      }
       sendSSE('error', { message: err.message || String(err) });
       res.end();
     }
@@ -832,6 +947,7 @@ app.post('/api/chat/stream', async (req, res) => {
 // Archive
 // ============================================================
 app.get('/api/conversations/:id/archive', (req, res) => {
+  if (!isAdminRequest(req)) return res.status(404).json({ error: 'Archive not found' });
   const data = archiveStore.read();
   const archive = data.archives.find(
     (a: any) => a.conversation_id === req.params.id
@@ -859,6 +975,7 @@ app.get('/api/conversations/:id/archive', (req, res) => {
 });
 
 app.post('/api/conversations/:id/archive', (req, res) => {
+  if (!isAdminRequest(req)) return res.status(404).json({ error: 'No archive found' });
   // Regenerate archive
   const data = archiveStore.read();
   const existing = data.archives.find(
@@ -876,6 +993,7 @@ app.post('/api/conversations/:id/archive', (req, res) => {
 // Retrieval Evidence
 // ============================================================
 app.get('/api/research-runs', (req, res) => {
+  if (!isAdminRequest(req)) return res.json([]);
   const limit = Math.min(Math.max(parseInt(String(req.query.limit || '100'), 10) || 100, 1), 500);
   const query = String(req.query.q || '').trim().toLowerCase();
   const runs = researchRunStore.read().research_runs
@@ -890,12 +1008,14 @@ app.get('/api/research-runs', (req, res) => {
 });
 
 app.get('/api/research-runs/:id', (req, res) => {
+  if (!isAdminRequest(req)) return res.status(404).json({ error: 'Research run not found' });
   const run = researchRunStore.read().research_runs.find((item: any) => item.id === req.params.id);
   if (!run) return res.status(404).json({ error: 'Research run not found' });
   res.json(run);
 });
 
 app.get('/api/evidence-packs', (req, res) => {
+  if (!isAdminRequest(req)) return res.json([]);
   const limit = Math.min(Math.max(parseInt(String(req.query.limit || '100'), 10) || 100, 1), 500);
   const query = String(req.query.q || '').trim().toLowerCase();
   const packs = evidencePackStore.read().evidence_packs
@@ -910,6 +1030,7 @@ app.get('/api/evidence-packs', (req, res) => {
 });
 
 app.get('/api/evidence-packs/:id', (req, res) => {
+  if (!isAdminRequest(req)) return res.status(404).json({ error: 'Evidence pack not found' });
   const pack = evidencePackStore.read().evidence_packs.find((item: any) => item.id === req.params.id);
   if (!pack) return res.status(404).json({ error: 'Evidence pack not found' });
   res.json(pack);
@@ -928,6 +1049,11 @@ app.get('/api/raw', (_req, res) => {
 });
 
 app.post('/api/raw/upload', upload.single('file'), (req, res) => {
+  if (!isAdminRequest(req)) {
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.rmSync(req.file.path, { force: true });
+    return res.status(404).json({ error: 'Not found' });
+  }
+
   if (!req.file) {
     return res.status(400).json({ error: 'No file uploaded' });
   }
@@ -1074,7 +1200,8 @@ app.get('/api/pdf/:id/file', (req, res) => {
 // ============================================================
 // Check
 // ============================================================
-app.post('/api/check', (_req, res) => {
+app.post('/api/check', (req, res) => {
+  if (!isAdminRequest(req)) return res.status(404).json({ error: 'Not found' });
   try {
     const scriptsDir = path.join(ROOT_DIR, 'tools', 'scripts');
     execSync(
@@ -1098,12 +1225,14 @@ app.get('/api/check/latest', (_req, res) => {
 // ============================================================
 // Review
 // ============================================================
-app.get('/api/review', (_req, res) => {
+app.get('/api/review', (req, res) => {
+  if (!isAdminRequest(req)) return res.json([]);
   const data = reviewStore.read();
   res.json(data.review_items);
 });
 
 app.post('/api/review', (req, res) => {
+  if (!isAdminRequest(req)) return res.status(404).json({ error: 'Not found' });
   const item = {
     id: uuidv4(),
     ...req.body,
@@ -1119,6 +1248,7 @@ app.post('/api/review', (req, res) => {
 });
 
 app.patch('/api/review/:id', (req, res) => {
+  if (!isAdminRequest(req)) return res.status(404).json({ error: 'Not found' });
   const review = reviewStore.update((d) => {
     const idx = d.review_items.findIndex((r: any) => r.id === req.params.id);
     if (idx === -1) return d;
@@ -1134,6 +1264,7 @@ app.patch('/api/review/:id', (req, res) => {
 // Prompt Generation
 // ============================================================
 app.post('/api/prompt/generate', (req, res) => {
+  if (!isAdminRequest(req)) return res.status(404).json({ error: 'Prompt not found' });
   const { conversation_id, check_issues } = req.body;
 
   let prompt = '# Wiki Update Tasks\n\n';
