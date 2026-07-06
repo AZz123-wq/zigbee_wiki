@@ -1,0 +1,80 @@
+---
+title: "Window Covering Cluster"
+type: entity
+sources:
+  - raw/specs/07-5123-07-ZigbeeClusterLibrary_Revision_7-1.pdf
+  - raw/test-specs/docs-r04-0x0102-Window-Covering-Cluster-Test-Specification.pdf
+tags: [zigbee, cluster, zcl, zcl-rev7, closures, window-covering]
+created: 2026-05-10
+updated: 2026-05-10
+cluster_id: "0x0102"
+status: reviewed
+confidence: 0.84
+---
+
+# Window Covering Cluster (0x0102)
+
+## 概述
+
+Window Covering Cluster（Cluster ID `0x0102`）属于 ZCL Rev 7 的 Closures 功能域，章节定位为 7.4。控制窗帘/百叶等开合、升降、倾角和百分比位置。
+
+Rev 7 精读范围：`raw/specs/07-5123-07-ZigbeeClusterLibrary_Revision_7-1.pdf p.488-p.499`。本页根据这些页的 cluster identifier、overview、server/client、attributes、commands 和行为说明整理；长表字段仍以来源页为准。
+
+## 正文
+
+### 定位
+
+| 字段 | 内容 |
+|------|------|
+| Cluster ID | `0x0102` |
+| 名称 | Window Covering |
+| 功能域 | Closures |
+| Rev 7 章节 | 7.4 |
+| 来源页 | p.488-p.499 |
+
+### 规范摘要
+
+Please see Chapter 2 for a general cluster overview defining cluster architecture, revision, classification, identification, etc. The window covering cluster provides an interface for controlling and adjusting automatic window coverings such as drapery motors, automatic shades, and blinds.
+
+### 依赖
+
+本次页级精读未抽取到独立的 Dependencies 小节；如实现依赖其他 cluster、profile 或设备类型，应回到来源页和应用规范一起确认。
+
+### 属性
+
+- `0x0007` Config/Status map8 0xxx xxxx R 0000 0011 M
+
+### 命令
+
+- Rev 7 明确说明 server/client 不接收或生成 cluster-specific command。
+
+### 行为要点
+
+- The window covering cluster provides an interface for controlling and adjusting automatic window coverings such as drapery motors, automatic shades, and blinds.
+- the CurrentPositionLiftPercentage attribute SHALL be mandatory only if Closed Loop control and Lift actions are supported; and the CurrentPositionTiltPercentage attribute SHALL be mandatory only if Closed Loop control an...
+- 7.4.2.1.2 WindowCoveringType Attribute The WindowCoveringType attribute identifies the type of window covering being controlled by this endpoint and SHALL be set to one of the non-reserved values in Table 7-41.
+- To change settings, devices SHALL write to the Mode attribute of the Window Covering Settings Attribute Set.
+- If the device is running in Open Loop Control or the device only supports Tilt actions, this attribute is not required as an attribute but has a special interpretation when received as part of a scene command (see “Scene...
+
+### 测试规范
+
+- 对应测试规范摘要: [[summaries/2026-05-08-window-covering-cluster-test-spec]] (测试要求)
+
+## 关键要点
+
+- `0x0102` 的权威定义来自 ZCL Rev 7；测试规范是 certification 要求，不能直接替代协议行为。
+- 本页保留来源页范围，后续实现、测试或差异分析应引用具体页码和章节。
+- 本页区分 Rev 7 协议定义与测试规范要求；测试规范内容只作为认证验证入口。
+
+## 交叉引用
+
+- [[entities/spec-zcl-rev7]]
+- [[summaries/2026-05-08-zcl-rev7]]
+- [[summaries/2026-05-08-window-covering-cluster-test-spec]]
+- [[index]]
+
+## 待深入
+
+- [ ] 按实现需求补齐完整属性表的类型、范围、access、默认值和 M/O 条件。
+- [ ] 按 command payload 深读补齐 request/response 字段、状态码和时序。
+- [ ] 若存在 profile/device type 约束，链接到对应 Device Type 或测试规范页面。
