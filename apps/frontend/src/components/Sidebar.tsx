@@ -24,13 +24,20 @@ interface Props {
 export default function Sidebar({ onLogout }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { currentUserRole, toggleSidebar, setMessages, startTransientConversation } = useStore();
+  const { currentUserRole, setSidebarOpen, setMessages, startTransientConversation } = useStore();
   const isAdmin = currentUserRole === 'admin';
+
+  const closeOnMobile = () => {
+    if (typeof window !== 'undefined' && !window.matchMedia('(min-width: 768px)').matches) {
+      setSidebarOpen(false);
+    }
+  };
 
   const handleNewChat = async () => {
     if (!isAdmin) {
       startTransientConversation();
       navigate('/');
+      closeOnMobile();
       return;
     }
 
@@ -39,6 +46,7 @@ export default function Sidebar({ onLogout }: Props) {
       useStore.getState().addConversation(conv);
       setMessages([]);
       navigate('/');
+      closeOnMobile();
     } catch (err) {
       console.error('创建对话失败:', err);
     }
@@ -54,12 +62,12 @@ export default function Sidebar({ onLogout }: Props) {
   ];
 
   return (
-    <div className="h-full flex flex-col bg-sidebar border-r border-gray-800">
+    <div className="h-full min-w-0 flex flex-col bg-sidebar border-r border-gray-800">
       {/* Header */}
       <div className="p-3 flex items-center justify-between border-b border-gray-800">
-        <span className="text-sm font-semibold text-gray-300">Wiki Chat</span>
+        <span className="text-sm font-semibold text-gray-300 truncate">Wiki Chat</span>
         <button
-          onClick={toggleSidebar}
+          onClick={() => setSidebarOpen(false)}
           className="p-1 rounded hover:bg-sidebar-hover text-gray-400"
           title="关闭侧边栏"
         >
@@ -88,7 +96,10 @@ export default function Sidebar({ onLogout }: Props) {
         {navItems.map((item) => (
           <button
             key={item.path}
-            onClick={() => navigate(item.path)}
+            onClick={() => {
+              navigate(item.path);
+              closeOnMobile();
+            }}
             className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
               location.pathname === item.path
                 ? 'bg-sidebar-active text-white'
@@ -104,7 +115,10 @@ export default function Sidebar({ onLogout }: Props) {
       {/* Settings */}
       <div className="border-t border-gray-800 p-2 flex flex-col gap-0.5">
         <button
-          onClick={() => navigate('/settings')}
+          onClick={() => {
+            navigate('/settings');
+            closeOnMobile();
+          }}
           className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
             location.pathname === '/settings'
               ? 'bg-sidebar-active text-white'
@@ -116,7 +130,10 @@ export default function Sidebar({ onLogout }: Props) {
         </button>
         {onLogout && (
           <button
-            onClick={() => onLogout()}
+            onClick={async () => {
+              await onLogout();
+              closeOnMobile();
+            }}
             className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:bg-sidebar-hover hover:text-gray-200 transition-colors"
           >
             <LogOut size={16} />

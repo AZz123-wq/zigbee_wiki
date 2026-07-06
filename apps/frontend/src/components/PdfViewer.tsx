@@ -72,22 +72,22 @@ export default function PdfViewer({ pdf, onClose }: Props) {
   };
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden md:flex-row">
       {/* Main viewer */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* Top bar */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-gray-800 flex-shrink-0">
+        <div className="flex items-center justify-between gap-3 px-3 py-2 border-b border-gray-800 flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <FileQuestion size={14} className="text-red-400 flex-shrink-0" />
             <span className="text-xs truncate">{pdf.filename}</span>
           </div>
-          <button onClick={onClose} className="p-0.5 hover:bg-gray-800 rounded text-gray-400">
+          <button onClick={onClose} className="flex-shrink-0 p-0.5 hover:bg-gray-800 rounded text-gray-400">
             <X size={14} />
           </button>
         </div>
 
         {/* PDF render area */}
-        <div className="flex-1 bg-gray-900">
+        <div className="min-h-0 flex-1 bg-gray-900">
           {pdf.id ? (
             <iframe
               src={getPdfFileUrl(pdf.id)}
@@ -102,17 +102,17 @@ export default function PdfViewer({ pdf, onClose }: Props) {
         </div>
 
         {/* Page controls */}
-        <div className="flex items-center gap-2 px-3 py-2 border-t border-gray-800 bg-gray-950 flex-shrink-0">
-          <label className="text-[10px] text-gray-500">Pages:</label>
+        <div className="flex flex-wrap items-center gap-2 px-3 py-2 border-t border-gray-800 bg-gray-950 flex-shrink-0">
+          <label className="flex-shrink-0 text-[10px] text-gray-500">Pages:</label>
           <input
             type="number"
             min={1}
             max={info?.pages || 999}
             value={startPage}
             onChange={(e) => setStartPage(Math.max(1, parseInt(e.target.value) || 1))}
-            className="w-14 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-center"
+            className="w-14 flex-shrink-0 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-center"
           />
-          <span className="text-gray-500 text-xs">to</span>
+          <span className="flex-shrink-0 text-gray-500 text-xs">to</span>
           <input
             type="number"
             min={1}
@@ -122,9 +122,9 @@ export default function PdfViewer({ pdf, onClose }: Props) {
               const val = parseInt(e.target.value) || 1;
               setEndPage(Math.max(startPage, Math.min(val, startPage + 4)));
             }}
-            className="w-14 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-center"
+            className="w-14 flex-shrink-0 bg-gray-800 border border-gray-700 rounded px-1.5 py-0.5 text-xs text-center"
           />
-          <span className="text-gray-500 text-[10px]">/ {info?.pages || '?'}</span>
+          <span className="flex-shrink-0 text-gray-500 text-[10px]">/ {info?.pages || '?'}</span>
 
           <button
             onClick={handleRead}
@@ -134,14 +134,14 @@ export default function PdfViewer({ pdf, onClose }: Props) {
               endPage - startPage > 4 ||
               startPage < 1
             }
-            className="px-2 py-0.5 rounded bg-blue-600/20 text-blue-300 text-xs hover:bg-blue-600/30 disabled:opacity-30 transition-colors"
+            className="flex-shrink-0 px-2 py-0.5 rounded bg-blue-600/20 text-blue-300 text-xs hover:bg-blue-600/30 disabled:opacity-30 transition-colors"
           >
             {reading ? '...' : 'Read'}
           </button>
 
           <button
             onClick={handleSelectForChat}
-            className="px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-xs hover:bg-emerald-600/30 transition-colors"
+            className="flex-shrink-0 px-2 py-0.5 rounded bg-emerald-600/20 text-emerald-300 text-xs hover:bg-emerald-600/30 transition-colors"
             title="Select this page for chat context"
           >
             +Chat
@@ -149,7 +149,7 @@ export default function PdfViewer({ pdf, onClose }: Props) {
 
           <button
             onClick={handleCopyPagePrompt}
-            className="ml-auto p-0.5 hover:bg-gray-800 rounded text-gray-400"
+            className="ml-0 flex-shrink-0 p-0.5 hover:bg-gray-800 rounded text-gray-400 sm:ml-auto"
             title="Copy safe read prompt"
           >
             <Copy size={12} />
@@ -158,7 +158,7 @@ export default function PdfViewer({ pdf, onClose }: Props) {
       </div>
 
       {/* Info panel */}
-      <div className="w-64 flex-shrink-0 border-l border-gray-800 overflow-y-auto p-3">
+      <div className="max-h-[38dvh] w-full flex-shrink-0 overflow-y-auto border-t border-gray-800 p-3 md:max-h-none md:w-64 md:border-l md:border-t-0">
         <h4 className="text-xs font-semibold text-gray-400 uppercase mb-3">PDF Info</h4>
         {info ? (
           <dl className="space-y-2 text-xs">
@@ -194,7 +194,7 @@ export default function PdfViewer({ pdf, onClose }: Props) {
                 <dt className="text-gray-500">Linked Wiki Pages</dt>
                 <dd className="mt-0.5">
                   {info.linked_wiki_pages.slice(0, 5).map((p: string, i: number) => (
-                    <span key={i} className="block text-emerald-300 text-[10px] truncate">{p}</span>
+                    <span key={i} className="block text-emerald-300 text-[10px] break-words md:truncate">{p}</span>
                   ))}
                 </dd>
               </div>
@@ -222,7 +222,7 @@ export default function PdfViewer({ pdf, onClose }: Props) {
             {readResult.error ? (
               <p className="text-xs text-red-400">{readResult.error}</p>
             ) : (
-              <pre className="text-[10px] text-gray-300 max-h-40 overflow-y-auto whitespace-pre-wrap bg-gray-800/50 rounded p-2">
+              <pre className="text-[10px] text-gray-300 max-h-40 overflow-auto whitespace-pre-wrap break-words bg-gray-800/50 rounded p-2">
                 {readResult.text?.slice(0, 2000)}
                 {readResult.truncated && '\n\n[Truncated...]'}
               </pre>
@@ -238,7 +238,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <dt className="text-gray-500">{label}</dt>
-      <dd className="text-gray-300 truncate">{value}</dd>
+      <dd className="text-gray-300 break-words md:truncate">{value}</dd>
     </div>
   );
 }

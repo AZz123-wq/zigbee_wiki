@@ -17,6 +17,7 @@ export default function ConversationList() {
     conversations,
     activeConversationId,
     setActiveConversation,
+    setSidebarOpen,
     removeConversation,
     updateConversation: updateStoreConv,
     setMessages,
@@ -34,10 +35,17 @@ export default function ConversationList() {
   const pendingRequestRef = useRef(0);
   const isAdmin = currentUserRole === 'admin';
 
+  const closeOnMobile = () => {
+    if (typeof window !== 'undefined' && !window.matchMedia('(min-width: 768px)').matches) {
+      setSidebarOpen(false);
+    }
+  };
+
   const handleSelect = async (id: string) => {
     if (id === activeConversationId) {
       // If already active, just navigate to chat if not there
       if (location.pathname !== '/') navigate('/');
+      closeOnMobile();
       return;
     }
 
@@ -45,11 +53,13 @@ export default function ConversationList() {
       if (location.pathname !== '/') navigate('/');
       setActiveConversation(id);
       setMessages([]);
+      closeOnMobile();
       return;
     }
 
     // Navigate to chat page if not there
     if (location.pathname !== '/') navigate('/');
+    closeOnMobile();
 
     const requestId = ++pendingRequestRef.current;
     setActiveConversation(id);
@@ -153,7 +163,7 @@ export default function ConversationList() {
   };
 
   return (
-    <div className="space-y-0.5">
+    <div className="min-w-0 space-y-0.5">
       {conversations.length === 0 && (
         <div className="text-center text-gray-500 text-sm py-8">
           暂无对话。
@@ -173,7 +183,7 @@ export default function ConversationList() {
             if (e.key === 'Enter') handleSelect(conv.id);
           }}
           aria-current={conv.id === activeConversationId ? 'true' : undefined}
-          className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
+          className={`group flex min-w-0 items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
             conv.id === activeConversationId
               ? 'bg-sidebar-active text-white'
               : 'text-gray-300 hover:bg-sidebar-hover'
@@ -194,7 +204,7 @@ export default function ConversationList() {
                 if (e.key === 'Enter') handleRename(conv.id);
                 if (e.key === 'Escape') setRenamingId(null);
               }}
-              className="flex-1 bg-gray-700 text-sm px-1 py-0.5 rounded outline-none"
+              className="min-w-0 flex-1 bg-gray-700 text-sm px-1 py-0.5 rounded outline-none"
               onClick={(e) => e.stopPropagation()}
             />
           ) : (
@@ -214,7 +224,7 @@ export default function ConversationList() {
           )}
 
           {/* Status indicators */}
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex flex-shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             {conv.has_raw && <span title="有关联 raw 文件"><FileText size={12} className="text-blue-400" /></span>}
             {conv.has_pdf && <span title="有关联 PDF"><FileQuestion size={12} className="text-yellow-400" /></span>}
             {conv.has_wiki_update && (

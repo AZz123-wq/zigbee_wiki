@@ -8,8 +8,8 @@ import { Database, Search, RefreshCw, FileText } from 'lucide-react';
 function SourceBadge({ item }: { item: any }) {
   const pages = item.pages?.length ? ` p.${item.pages.join(',')}` : '';
   return (
-    <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-600/10 text-yellow-300">
-      {item.source_path || item.path}{pages}
+    <span className="inline-flex max-w-full min-w-0 text-[10px] px-1.5 py-0.5 rounded bg-yellow-600/10 text-yellow-300">
+      <span className="truncate">{item.source_path || item.path}{pages}</span>
     </span>
   );
 }
@@ -39,26 +39,26 @@ export default function RetrievalPage() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Database size={18} className="text-cyan-400" />
-          <div>
+    <div className="flex h-full min-w-0 flex-col">
+      <div className="border-b border-gray-800 px-3 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <Database size={18} className="flex-shrink-0 text-cyan-400" />
+          <div className="min-w-0">
             <h2 className="text-sm font-semibold text-gray-200">检索记录</h2>
-            <p className="text-xs text-gray-500">只展示 spec/source 搜索轨迹和 evidence pack，不保存模型回答正文。</p>
+            <p className="text-xs text-gray-500 break-words">只展示 spec/source 搜索轨迹和 evidence pack，不保存模型回答正文。</p>
           </div>
         </div>
         <button
           onClick={() => load()}
           disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600/20 text-cyan-300 text-xs hover:bg-cyan-600/30 disabled:opacity-50"
+          className="flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600/20 text-cyan-300 text-xs hover:bg-cyan-600/30 disabled:opacity-50"
         >
           <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
           刷新
         </button>
       </div>
 
-      <div className="border-b border-gray-800 px-4 py-3">
+      <div className="border-b border-gray-800 px-3 sm:px-4 py-3">
         <div className="relative max-w-xl">
           <Search size={14} className="absolute left-2.5 top-2.5 text-gray-500" />
           <input
@@ -73,18 +73,18 @@ export default function RetrievalPage() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <section>
+      <div className="grid flex-1 grid-cols-1 gap-4 overflow-y-auto p-3 sm:p-4 xl:grid-cols-2">
+        <section className="min-w-0">
           <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Evidence Packs ({packs.length})</h3>
           <div className="space-y-3">
             {packs.map((pack) => (
-              <div key={pack.id} className="border border-gray-700 bg-gray-800/40 rounded-lg p-3">
+              <div key={pack.id} className="min-w-0 border border-gray-700 bg-gray-800/40 rounded-lg p-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p className="text-sm text-gray-200">{pack.topic_key}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{pack.query}</p>
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-200 break-words">{pack.topic_key}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 break-words">{pack.query}</p>
                   </div>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-cyan-600/20 text-cyan-300">
+                  <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-cyan-600/20 text-cyan-300">
                     {pack.record_type || 'source_evidence_pack'}
                   </span>
                 </div>
@@ -104,16 +104,16 @@ export default function RetrievalPage() {
           </div>
         </section>
 
-        <section>
+        <section className="min-w-0">
           <h3 className="text-xs font-semibold text-gray-400 uppercase mb-2">Research Runs ({runs.length})</h3>
           <div className="space-y-3">
             {runs.map((run) => (
-              <div key={run.id} className="border border-gray-700 bg-gray-800/40 rounded-lg p-3">
+              <div key={run.id} className="min-w-0 border border-gray-700 bg-gray-800/40 rounded-lg p-3">
                 <div className="flex items-start gap-2">
                   <FileText size={14} className="text-blue-400 mt-0.5" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-gray-200">{run.query}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <p className="text-sm text-gray-200 break-words">{run.query}</p>
+                    <p className="text-xs text-gray-500 mt-0.5 break-words">
                       {run.search_mode || 'source_search'} · {new Date(run.created_at).toLocaleString('zh-CN')}
                     </p>
                   </div>

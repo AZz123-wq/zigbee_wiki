@@ -124,17 +124,17 @@ export default function RawFilesPage() {
   };
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-w-0 overflow-hidden">
       {/* File list */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         {/* Header */}
-        <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between flex-shrink-0">
-          <div>
+        <div className="border-b border-gray-800 px-3 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
+          <div className="min-w-0">
             <h2 className="text-sm font-semibold">Raw 文件</h2>
             <p className="text-xs text-gray-500">{rawFiles.length} 个文件, {pdfFiles.length} 个 PDF</p>
           </div>
           {canUpload && (
-            <label className={`cursor-pointer px-3 py-1.5 rounded-lg text-white text-xs transition-colors flex items-center gap-1.5 ${
+            <label className={`flex-shrink-0 cursor-pointer px-3 py-1.5 rounded-lg text-white text-xs transition-colors flex items-center gap-1.5 ${
               uploading ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'
             }`}>
               {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
@@ -146,15 +146,15 @@ export default function RawFilesPage() {
 
         {/* Upload errors */}
         {uploadErrors.length > 0 && (
-          <div className="mx-4 mt-2 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
+          <div className="mx-3 sm:mx-4 mt-2 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">
             {uploadErrors.map((err, i) => (
-              <p key={i} className="text-xs text-red-400">{err}</p>
+              <p key={i} className="text-xs text-red-400 break-words">{err}</p>
             ))}
           </div>
         )}
 
         {/* Search */}
-        <div className="px-4 py-2 flex-shrink-0">
+        <div className="px-3 sm:px-4 py-2 flex-shrink-0">
           <div className="relative">
             <Search size={14} className="absolute left-2.5 top-2.5 text-gray-500" />
             <input
@@ -169,7 +169,7 @@ export default function RawFilesPage() {
         {/* Drop zone */}
         {canUpload && (
           <div
-            className={`flex-shrink-0 mx-4 my-2 border-2 border-dashed rounded-lg p-3 text-center transition-colors ${
+            className={`flex-shrink-0 mx-3 sm:mx-4 my-2 border-2 border-dashed rounded-lg p-3 text-center transition-colors ${
               isDragOver
                 ? 'border-blue-500 bg-blue-900/10'
                 : 'border-gray-700 hover:border-gray-600'
@@ -185,7 +185,7 @@ export default function RawFilesPage() {
         )}
 
         {/* File list */}
-        <div className="flex-1 overflow-y-auto px-2">
+        <div className="flex-1 min-w-0 overflow-y-auto px-2">
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 size={20} className="animate-spin text-gray-500" />
@@ -202,7 +202,7 @@ export default function RawFilesPage() {
                 return (
                   <div
                     key={file.id}
-                    className={`group flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors cursor-pointer ${
+                    className={`group flex min-w-0 items-center gap-2 sm:gap-3 px-2 sm:px-3 py-2.5 rounded-lg transition-colors cursor-pointer ${
                       selectedRawFiles.includes(file.path)
                         ? 'bg-blue-600/10 border border-blue-600/20'
                         : 'hover:bg-gray-800/50 border border-transparent'
@@ -211,7 +211,7 @@ export default function RawFilesPage() {
                   >
                     <Icon
                       size={16}
-                      className={`${
+                      className={`flex-shrink-0 ${
                         file.type === 'pdf'
                           ? 'text-red-400'
                           : file.type === 'markdown'
@@ -223,8 +223,8 @@ export default function RawFilesPage() {
                       <p className="text-xs truncate">{file.filename}</p>
                       <p className="text-[10px] text-gray-500">{file.size_human}</p>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${statusColors[file.status] || 'bg-gray-700 text-gray-400'}`}>
+                    <div className="flex flex-shrink-0 items-center gap-1.5">
+                      <span className={`max-w-[5rem] truncate text-[10px] px-1.5 py-0.5 rounded ${statusColors[file.status] || 'bg-gray-700 text-gray-400'}`}>
                         {statusLabels[file.status] || file.status}
                       </span>
                       {isUnprocessed && (
@@ -244,7 +244,7 @@ export default function RawFilesPage() {
                             const pdf = pdfFiles.find((p) => p.raw_file_id === file.id);
                             setSelectedPdf(pdf || { ...file, raw_file_id: file.id, id: file.id });
                           }}
-                          className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-gray-700 rounded transition-all"
+                          className="p-0.5 hover:bg-gray-700 rounded transition-all opacity-100 md:opacity-0 md:group-hover:opacity-100"
                           title="预览 PDF"
                         >
                           <Eye size={12} className="text-gray-400" />
@@ -266,7 +266,7 @@ export default function RawFilesPage() {
 
       {/* PDF Preview Panel */}
       {selectedPdf && (
-        <div className="w-[50%] flex-shrink-0 border-l border-gray-800">
+        <div className="fixed inset-0 z-50 h-dvh bg-gray-950 md:relative md:inset-auto md:z-auto md:h-full md:w-1/2 md:flex-shrink-0 md:border-l md:border-gray-800">
           <PdfViewer pdf={selectedPdf} onClose={() => setSelectedPdf(null)} />
         </div>
       )}

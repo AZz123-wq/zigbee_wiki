@@ -267,18 +267,23 @@ export default function ChatInput() {
     <div className="chat-input-area bg-gray-950">
       {/* Context bar */}
       {hasContext && (
-        <div className="px-4 pt-2 flex flex-wrap gap-1.5">
+        <div className="min-w-0 px-3 sm:px-4 pt-2 flex flex-wrap gap-1.5">
           {selectedWikiPages.map((page) => (
-            <span key={page} className="text-xs bg-emerald-600/20 text-emerald-300 px-2 py-0.5 rounded-full">
-              W: {page}
+            <span key={page} className="inline-flex max-w-full min-w-0 text-xs bg-emerald-600/20 text-emerald-300 px-2 py-0.5 rounded-full">
+              <span className="truncate">W: {page}</span>
+            </span>
+          ))}
+          {selectedRawFiles.map((file) => (
+            <span key={file} className="inline-flex max-w-full min-w-0 text-xs bg-blue-600/20 text-blue-300 px-2 py-0.5 rounded-full">
+              <span className="truncate">R: {file}</span>
             </span>
           ))}
           {selectedPdfPages.map((pp) => (
-            <span key={pp.path} className="text-xs bg-yellow-600/20 text-yellow-300 px-2 py-0.5 rounded-full">
-              P: {pp.path} (p.{pp.pages.join(',')})
+            <span key={pp.path} className="inline-flex max-w-full min-w-0 text-xs bg-yellow-600/20 text-yellow-300 px-2 py-0.5 rounded-full">
+              <span className="truncate">P: {pp.path} (p.{pp.pages.join(',')})</span>
             </span>
           ))}
-          <button onClick={clearContext} className="text-xs text-gray-500 hover:text-gray-300 ml-1">
+          <button type="button" onClick={clearContext} className="text-xs text-gray-500 hover:text-gray-300 ml-1">
             清除全部
           </button>
         </div>
@@ -286,17 +291,17 @@ export default function ChatInput() {
 
       {/* Uploaded files preview */}
       {uploadedFiles.length > 0 && (
-        <div className="px-4 pt-2 flex flex-wrap gap-2">
+        <div className="min-w-0 px-3 sm:px-4 pt-2 flex flex-wrap gap-2">
           {uploadedFiles.map((file, i) => (
-            <div key={i} className="flex items-center gap-1 bg-gray-800 rounded-lg px-2 py-1 text-xs">
+            <div key={i} className="flex max-w-full min-w-0 items-center gap-1 bg-gray-800 rounded-lg px-2 py-1 text-xs">
               {uploading ? (
-                <Loader2 size={12} className="text-blue-400 animate-spin" />
+                <Loader2 size={12} className="flex-shrink-0 text-blue-400 animate-spin" />
               ) : (
-                <Paperclip size={12} className="text-gray-400" />
+                <Paperclip size={12} className="flex-shrink-0 text-gray-400" />
               )}
-              <span className="text-gray-300 max-w-[150px] truncate">{file.name}</span>
+              <span className="min-w-0 max-w-[12rem] truncate text-gray-300">{file.name}</span>
               {!uploading && (
-                <button onClick={() => removeFile(i)} className="text-gray-500 hover:text-gray-300">
+                <button type="button" onClick={() => removeFile(i)} className="flex-shrink-0 text-gray-500 hover:text-gray-300">
                   <X size={12} />
                 </button>
               )}
@@ -307,7 +312,7 @@ export default function ChatInput() {
 
       {/* Input area */}
       <div
-        className={`p-4 ${isDragOver ? 'bg-blue-900/10' : ''}`}
+        className={`p-3 sm:p-4 ${isDragOver ? 'bg-blue-900/10' : ''}`}
         onDragOver={(e) => {
           e.preventDefault();
           if (canUpload) setIsDragOver(true);
@@ -315,7 +320,7 @@ export default function ChatInput() {
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
       >
-        <div className="max-w-3xl mx-auto">
+        <div className="mx-auto max-w-3xl min-w-0">
           <div className="relative">
             <textarea
               value={input}
@@ -327,7 +332,7 @@ export default function ChatInput() {
                   : '向 Wiki 提问... (Shift+Enter 换行)'
               }
               rows={2}
-              className={`w-full bg-gray-800 border rounded-xl px-4 py-3 pr-24 text-sm resize-none
+              className={`w-full min-w-0 bg-gray-800 border rounded-xl px-3 sm:px-4 py-3 pr-20 sm:pr-24 text-sm resize-none
                 focus:outline-none focus:border-blue-500 transition-colors
                 placeholder-gray-500 ${
                   isDragOver ? 'border-blue-500 bg-blue-900/10' : 'border-gray-700'
@@ -344,6 +349,7 @@ export default function ChatInput() {
                 className="hidden"
               />
               <button
+                type="button"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={loading || !canUpload}
                 className="p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-gray-700 disabled:opacity-30 transition-colors"
@@ -353,6 +359,7 @@ export default function ChatInput() {
               </button>
               {loading ? (
                 <button
+                  type="button"
                   onClick={handleStop}
                   className="p-1.5 rounded-lg bg-red-600 text-white hover:bg-red-500 transition-colors"
                   title="停止生成"
@@ -361,6 +368,7 @@ export default function ChatInput() {
                 </button>
               ) : (
                 <button
+                  type="button"
                   onClick={handleSend}
                   disabled={(!input.trim() && (canUpload ? uploadedFiles.length === 0 : true)) || uploading}
                   className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"

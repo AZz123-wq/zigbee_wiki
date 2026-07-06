@@ -91,14 +91,14 @@ export default function CheckPage() {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-w-0 flex-col">
       {/* Header */}
-      <div className="border-b border-gray-800 px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="border-b border-gray-800 px-3 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-2">
           <ShieldCheck size={18} className="text-emerald-400" />
-          <div>
+          <div className="min-w-0">
             <h2 className="text-sm font-semibold text-gray-200">Wiki 健康检查</h2>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 truncate">
               {result ? `上次检查: ${new Date(result.created_at).toLocaleString('zh-CN')}` : '尚未检查'}
             </p>
           </div>
@@ -106,7 +106,7 @@ export default function CheckPage() {
         <button
           onClick={handleCheck}
           disabled={checking || currentUserRole !== 'admin'}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-500 disabled:opacity-50 transition-colors"
+          className="flex flex-shrink-0 items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-500 disabled:opacity-50 transition-colors"
         >
           <RefreshCw size={14} className={checking ? 'animate-spin' : ''} />
           {checking ? '检查中...' : currentUserRole === 'admin' ? '执行检查' : '仅管理员可检查'}
@@ -114,7 +114,7 @@ export default function CheckPage() {
       </div>
 
       {/* Results */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-5 w-5 border-2 border-gray-500 border-t-transparent" />
@@ -126,19 +126,19 @@ export default function CheckPage() {
             <p className="text-xs mt-1">点击"执行检查"分析 Wiki 健康状态。</p>
           </div>
         ) : (
-          <div className="max-w-3xl mx-auto space-y-4">
+          <div className="mx-auto w-full max-w-3xl space-y-4">
             {/* Score card */}
-            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
-              <div className="flex items-center gap-4">
+            <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-3 sm:p-4">
+              <div className="flex items-center gap-3 sm:gap-4">
                 <div className={`text-4xl font-bold ${getScoreColor(result.health_score)}`}>
                   {result.health_score}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-200">健康评分</p>
-                  <p className="text-xs text-gray-400">{result.summary}</p>
+                  <p className="text-xs text-gray-400 break-words">{result.summary}</p>
                 </div>
               </div>
-              <div className="flex gap-3 mt-3">
+              <div className="flex flex-wrap gap-2 sm:gap-3 mt-3">
                 <span className="text-xs bg-red-600/20 text-red-300 px-2 py-0.5 rounded">
                   {result.critical + result.errors} 个错误
                 </span>
@@ -156,7 +156,7 @@ export default function CheckPage() {
               <div className="flex justify-end">
                 <button
                   onClick={handleCopyPrompt}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-300 text-xs hover:bg-blue-600/30 transition-colors"
+                  className="flex max-w-full items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-300 text-xs hover:bg-blue-600/30 transition-colors"
                 >
                   <Copy size={12} />
                   {copied ? '已复制!' : '复制 Claude Code 修复提示词'}
@@ -172,23 +172,23 @@ export default function CheckPage() {
                 return (
                   <div
                     key={issue.id}
-                    className="bg-gray-800/30 border border-gray-700/50 rounded-lg p-3 hover:border-gray-600/50 transition-colors"
+                    className="min-w-0 bg-gray-800/30 border border-gray-700/50 rounded-lg p-3 hover:border-gray-600/50 transition-colors"
                   >
                     <div className="flex items-start gap-2">
                       <Icon size={14} className={`mt-0.5 flex-shrink-0 ${severityColors[issue.severity]}`} />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-medium text-gray-200">{issue.title}</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-xs font-medium text-gray-200 break-words">{issue.title}</span>
                           <span className={`text-[10px] px-1.5 py-0.5 rounded ${severityColors[issue.severity]} bg-opacity-10 bg-current`}>
                             {sevLabel}
                           </span>
                         </div>
-                        <p className="text-xs text-gray-400 mt-0.5">{issue.message}</p>
-                        <p className="text-[10px] text-gray-500 mt-1">
-                          文件: <code className="text-gray-400">{issue.file}</code>
+                        <p className="text-xs text-gray-400 mt-0.5 break-words">{issue.message}</p>
+                        <p className="text-[10px] text-gray-500 mt-1 break-words">
+                          文件: <code className="text-gray-400 break-all">{issue.file}</code>
                         </p>
                         {issue.suggestion && (
-                          <p className="text-[10px] text-blue-300 mt-1">
+                          <p className="text-[10px] text-blue-300 mt-1 break-words">
                             修复建议: {issue.suggestion}
                           </p>
                         )}

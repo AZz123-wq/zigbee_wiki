@@ -26,9 +26,22 @@ import { Loader2 } from 'lucide-react';
 import type { AuthRole } from './lib/types';
 
 export default function App() {
-  const { setConversations, setActiveConversation, setMessages, setCurrentUserRole, sidebarOpen } = useStore();
+  const {
+    setConversations,
+    setActiveConversation,
+    setMessages,
+    setCurrentUserRole,
+    sidebarOpen,
+    setSidebarOpen,
+  } = useStore();
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
+
+  const resetSidebarForViewport = useCallback(() => {
+    setSidebarOpen(
+      typeof window === 'undefined' || window.matchMedia('(min-width: 768px)').matches
+    );
+  }, [setSidebarOpen]);
 
   const clearWorkspaceState = useCallback(() => {
     useStore.setState({
@@ -87,6 +100,7 @@ export default function App() {
         setAuthenticated(status.authenticated);
         setCurrentUserRole(status.authenticated ? status.role || null : null);
         if (status.authenticated) {
+          resetSidebarForViewport();
           await loadInitialData(status.role);
         }
       })
@@ -102,7 +116,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [loadInitialData, setCurrentUserRole]);
+  }, [loadInitialData, resetSidebarForViewport, setCurrentUserRole]);
 
   const handleLogin = async (password: string) => {
     const result = await login(password);
@@ -111,6 +125,7 @@ export default function App() {
     }
     setAuthenticated(true);
     setCurrentUserRole(result.role || null);
+    resetSidebarForViewport();
     await loadInitialData(result.role);
   };
 
@@ -123,7 +138,7 @@ export default function App() {
 
   if (checkingAuth) {
     return (
-      <div className="h-screen bg-gray-950 text-gray-400 flex items-center justify-center">
+      <div className="h-dvh bg-gray-950 text-gray-400 flex items-center justify-center">
         <Loader2 size={22} className="animate-spin" />
       </div>
     );
@@ -134,18 +149,26 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-950 text-gray-100">
+    <div className="relative flex h-dvh overflow-hidden bg-gray-950 text-gray-100">
       {/* Sidebar */}
-      <div
-        className={`transition-all duration-200 flex-shrink-0 ${
-          sidebarOpen ? 'w-[280px]' : 'w-0 overflow-hidden'
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="关闭侧边栏"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 h-dvh w-[85vw] max-w-[320px] transform transition-transform duration-200 md:relative md:inset-auto md:z-auto md:h-full md:max-w-none md:flex-shrink-0 md:translate-x-0 ${
+          sidebarOpen ? 'translate-x-0 md:w-[280px]' : '-translate-x-full md:w-0 md:overflow-hidden'
         }`}
       >
         <Sidebar onLogout={handleLogout} />
-      </div>
+      </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <Routes>
           <Route path="/" element={<ChatPage />} />
           <Route path="/raw" element={<RawFilesPage />} />
@@ -155,7 +178,7 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
-      </div>
+      </main>
     </div>
   );
 }

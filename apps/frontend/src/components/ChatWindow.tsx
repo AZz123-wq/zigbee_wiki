@@ -27,9 +27,9 @@ export default function ChatWindow() {
 
   if (messages.length === 0 && !loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
+      <div className="flex-1 min-w-0 flex items-center justify-center">
         <div className="text-center text-gray-500 max-w-md px-4">
-          <h2 className="text-2xl font-semibold text-gray-400 mb-2">Wiki Chat Workbench</h2>
+          <h2 className="text-xl sm:text-2xl font-semibold text-gray-400 mb-2">Wiki Chat Workbench</h2>
           <p className="text-sm leading-relaxed">
             针对你的 Zigbee Wiki 知识库提问。
             <br />
@@ -47,7 +47,7 @@ export default function ChatWindow() {
     <div
       ref={containerRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto px-4 py-4 space-y-4"
+      className="flex-1 min-w-0 overflow-y-auto px-3 sm:px-4 py-4 space-y-4"
     >
       {messages.map((msg) => (
         <MessageBubble key={msg.id} message={msg} />

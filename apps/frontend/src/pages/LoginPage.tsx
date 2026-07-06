@@ -99,7 +99,7 @@ export default function LoginPage({ onLogin }: Props) {
   );
 
   return (
-    <div className="min-h-screen bg-gray-950 text-gray-100 flex items-center justify-center px-4">
+    <div className="min-h-dvh bg-gray-950 text-gray-100 flex items-center justify-center px-4 py-6">
       {mode === 'login' && (
         <form
           onSubmit={handleSubmit}

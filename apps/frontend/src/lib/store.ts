@@ -12,6 +12,7 @@ interface AppState {
 
   // Sidebar
   sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
 
   // Detail drawer
@@ -59,6 +60,7 @@ export const useStore = create<AppState>((set) => ({
   setCurrentUserRole: (role) => set({ currentUserRole: role }),
 
   sidebarOpen: true,
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
   detailOpen: false,

@@ -69,18 +69,18 @@ export default function ArchiveTimeline({ archive }: Props) {
   };
 
   return (
-    <div className="space-y-0">
+    <div className="min-w-0 space-y-0">
       {archive.steps.map((step: any) => {
         const config = stepConfig[step.type] || { icon: Circle, label: step.title };
         return (
-          <div key={step.id} className="timeline-step relative pl-8 pb-5">
+          <div key={step.id} className="timeline-step relative min-w-0 pl-8 pb-5">
             {/* Dot */}
             <div className="absolute left-0 top-0.5">{statusIcon(step.status)}</div>
 
             {/* Content */}
-            <div>
+            <div className="min-w-0">
               <h4 className="text-sm font-medium text-gray-200">{config.label}</h4>
-              <p className="text-xs text-gray-400 mt-0.5">{step.summary}</p>
+              <p className="text-xs text-gray-400 mt-0.5 break-words">{step.summary}</p>
 
               {/* Expandable details */}
               {step.details && Object.keys(step.details).length > 0 && (

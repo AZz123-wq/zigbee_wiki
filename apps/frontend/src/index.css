@@ -2,6 +2,16 @@
 @tailwind components;
 @tailwind utilities;
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  overflow-x: hidden;
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
@@ -27,6 +37,20 @@
   opacity: 0;
   transform: translateY(10px);
   animation: messageIn 0.2s ease-out forwards;
+}
+
+.message-content {
+  overflow-wrap: anywhere;
+}
+
+.message-content pre {
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.message-content code {
+  overflow-wrap: anywhere;
 }
 
 @keyframes messageIn {

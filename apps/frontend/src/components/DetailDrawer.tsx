@@ -30,24 +30,24 @@ export default function DetailDrawer() {
   if (!detailOpen) return null;
 
   return (
-    <div className="drawer-enter w-[380px] flex-shrink-0 border-l border-gray-800 bg-gray-950 flex flex-col overflow-hidden">
+    <div className="drawer-enter fixed inset-0 z-50 h-dvh w-full flex-shrink-0 border-l-0 border-gray-800 bg-gray-950 flex flex-col overflow-hidden md:relative md:inset-auto md:z-auto md:h-full md:w-[380px] md:border-l">
       {/* Header */}
-      <div className="flex items-center justify-between p-3 border-b border-gray-800">
-        <div>
+      <div className="flex items-center justify-between gap-3 p-3 border-b border-gray-800">
+        <div className="min-w-0">
           <h3 className="text-sm font-semibold text-gray-200">
             {detailContent === 'archive' ? '归档流程' : '上下文'}
           </h3>
           {conv && (
-            <p className="text-xs text-gray-500 truncate max-w-[250px]">{conv.title}</p>
+            <p className="text-xs text-gray-500 truncate md:max-w-[250px]">{conv.title}</p>
           )}
         </div>
-        <button onClick={closeDetail} className="p-1 rounded hover:bg-gray-800 text-gray-400">
+        <button onClick={closeDetail} className="flex-shrink-0 p-1 rounded hover:bg-gray-800 text-gray-400">
           <X size={16} />
         </button>
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4">
         {loading ? (
           <div className="flex items-center justify-center py-12 text-gray-500">
             <Loader2 size={20} className="animate-spin" />
@@ -67,7 +67,7 @@ export default function DetailDrawer() {
               {(conv as any).related_wiki_pages?.length > 0 ? (
                 <ul className="space-y-1">
                   {(conv as any).related_wiki_pages.map((page: string, i: number) => (
-                    <li key={i} className="text-sm text-emerald-300 bg-emerald-600/10 rounded px-2 py-1">
+                    <li key={i} className="text-sm text-emerald-300 bg-emerald-600/10 rounded px-2 py-1 break-words">
                       {page}
                     </li>
                   ))}
@@ -81,7 +81,7 @@ export default function DetailDrawer() {
               {(conv as any).related_raw_files?.length > 0 ? (
                 <ul className="space-y-1">
                   {(conv as any).related_raw_files.map((file: string, i: number) => (
-                    <li key={i} className="text-sm text-blue-300 bg-blue-600/10 rounded px-2 py-1">
+                    <li key={i} className="text-sm text-blue-300 bg-blue-600/10 rounded px-2 py-1 break-words">
                       {file}
                     </li>
                   ))}
@@ -95,7 +95,7 @@ export default function DetailDrawer() {
               {(conv as any).related_pdf_pages?.length > 0 ? (
                 <ul className="space-y-1">
                   {(conv as any).related_pdf_pages.map((pp: any, i: number) => (
-                    <li key={i} className="text-sm text-yellow-300 bg-yellow-600/10 rounded px-2 py-1">
+                    <li key={i} className="text-sm text-yellow-300 bg-yellow-600/10 rounded px-2 py-1 break-words">
                       {pp.path} (页码 {pp.pages?.join(', ')})
                     </li>
                   ))}

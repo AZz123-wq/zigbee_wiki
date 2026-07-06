@@ -35,7 +35,7 @@ export default function MessageBubble({ message }: Props) {
     (message.search_trace?.selected_evidence_packs?.length || 0);
 
   return (
-    <div className={`message-enter flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
+    <div className={`message-enter flex min-w-0 gap-2 sm:gap-3 ${message.role === 'user' ? 'flex-row-reverse' : ''}`}>
       {/* Avatar */}
       <div className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center ${
         message.role === 'user' ? 'bg-blue-600' : 'bg-gray-700'
@@ -44,9 +44,9 @@ export default function MessageBubble({ message }: Props) {
       </div>
 
       {/* Content */}
-      <div className={`flex-1 max-w-[85%] ${message.role === 'user' ? 'text-right' : ''}`}>
+      <div className={`min-w-0 flex-1 max-w-[85%] ${message.role === 'user' ? 'text-right' : ''}`}>
         <div
-          className={`inline-block rounded-lg px-4 py-2.5 border ${style} ${
+          className={`message-content inline-block max-w-full rounded-lg px-3 sm:px-4 py-2.5 border text-left ${style} ${
             message.role === 'user' ? 'rounded-tr-sm' : 'rounded-tl-sm'
           }`}
         >
@@ -55,7 +55,7 @@ export default function MessageBubble({ message }: Props) {
               <ReactMarkdown>{message.content}</ReactMarkdown>
             </div>
           ) : (
-            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+            <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
           )}
 
           {message.search_trace?.auto_context_used && (
@@ -70,7 +70,7 @@ export default function MessageBubble({ message }: Props) {
               {message.citations.map((cite, i) => (
                 <span
                   key={i}
-                  className={`text-xs px-2 py-0.5 rounded-full cursor-default ${
+                  className={`inline-flex max-w-full min-w-0 text-xs px-2 py-0.5 rounded-full cursor-default ${
                     cite.type === 'wiki'
                       ? 'bg-emerald-600/20 text-emerald-300'
                       : cite.type === 'pdf'
@@ -81,12 +81,14 @@ export default function MessageBubble({ message }: Props) {
                   }`}
                   title={`${cite.type}: ${cite.path}${cite.pages ? ` (p.${cite.pages.join(',')})` : ''}`}
                 >
-                  {cite.type === 'wiki' && 'W '}
-                  {cite.type === 'pdf' && 'P '}
-                  {cite.type === 'raw' && 'R '}
-                  {cite.type === 'evidence' && 'E '}
-                  {cite.title.slice(0, 30)}
-                  {cite.pages && ` p.${cite.pages.join(',')}`}
+                  <span className="truncate">
+                    {cite.type === 'wiki' && 'W '}
+                    {cite.type === 'pdf' && 'P '}
+                    {cite.type === 'raw' && 'R '}
+                    {cite.type === 'evidence' && 'E '}
+                    {cite.title.slice(0, 30)}
+                    {cite.pages && ` p.${cite.pages.join(',')}`}
+                  </span>
                 </span>
               ))}
             </div>

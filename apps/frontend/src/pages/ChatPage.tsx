@@ -12,18 +12,19 @@ export default function ChatPage() {
   const { sidebarOpen, toggleSidebar, detailOpen } = useStore();
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full min-w-0 overflow-hidden">
       {/* Main chat area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar (mobile sidebar toggle) */}
-        <div className="border-b border-gray-800 px-4 py-2 flex items-center justify-between flex-shrink-0">
+        <div className="border-b border-gray-800 px-3 sm:px-4 py-2 flex items-center justify-between gap-2 flex-shrink-0">
           <button
             onClick={toggleSidebar}
             className="p-1 rounded hover:bg-gray-800 text-gray-400"
+            title={sidebarOpen ? '关闭侧边栏' : '打开侧边栏'}
           >
             <PanelLeft size={16} />
           </button>
-          <span className="text-xs text-gray-500">Wiki Chat Workbench</span>
+          <span className="min-w-0 truncate text-xs text-gray-500">Wiki Chat Workbench</span>
           <div className="w-6" />
         </div>
 
