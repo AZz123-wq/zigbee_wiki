@@ -4,6 +4,7 @@
  */
 import { useState, useEffect } from 'react';
 import { runCheck, getLatestCheck, generatePrompt } from '../lib/api';
+import { useStore } from '../lib/store';
 import {
   ShieldCheck,
   AlertTriangle,
@@ -37,6 +38,7 @@ const severityLabels: Record<string, string> = {
 };
 
 export default function CheckPage() {
+  const { currentUserRole } = useStore();
   const [result, setResult] = useState<CheckResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -103,11 +105,11 @@ export default function CheckPage() {
         </div>
         <button
           onClick={handleCheck}
-          disabled={checking}
+          disabled={checking || currentUserRole !== 'admin'}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs hover:bg-emerald-500 disabled:opacity-50 transition-colors"
         >
           <RefreshCw size={14} className={checking ? 'animate-spin' : ''} />
-          {checking ? '检查中...' : '执行检查'}
+          {checking ? '检查中...' : currentUserRole === 'admin' ? '执行检查' : '仅管理员可检查'}
         </button>
       </div>
 
@@ -150,15 +152,17 @@ export default function CheckPage() {
             </div>
 
             {/* Copy prompt button */}
-            <div className="flex justify-end">
-              <button
-                onClick={handleCopyPrompt}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-300 text-xs hover:bg-blue-600/30 transition-colors"
-              >
-                <Copy size={12} />
-                {copied ? '已复制!' : '复制 Claude Code 修复提示词'}
-              </button>
-            </div>
+            {currentUserRole === 'admin' && (
+              <div className="flex justify-end">
+                <button
+                  onClick={handleCopyPrompt}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/20 text-blue-300 text-xs hover:bg-blue-600/30 transition-colors"
+                >
+                  <Copy size={12} />
+                  {copied ? '已复制!' : '复制 Claude Code 修复提示词'}
+                </button>
+              </div>
+            )}
 
             {/* Issues list */}
             <div className="space-y-2">

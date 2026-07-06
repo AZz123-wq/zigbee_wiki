@@ -2,6 +2,15 @@
 // Shared Types for Wiki Chat Workbench
 // ============================================================
 
+export type AuthRole = 'admin' | 'user';
+
+export interface AuthStatus {
+  authenticated: boolean;
+  registration_available?: boolean;
+  user_id?: string;
+  role?: AuthRole;
+}
+
 // --- Conversation ---
 export interface Conversation {
   id: string;
@@ -18,6 +27,7 @@ export interface Conversation {
   related_wiki_pages: string[];
   related_pdf_pages: { path: string; pages: number[] }[];
   last_summary: string;
+  transient?: boolean;
 }
 
 // --- Message ---
@@ -270,6 +280,7 @@ export interface ChatRequest {
   wiki_pages?: string[];
   raw_files?: string[];
   pdf_pages?: { path: string; pages: number[] }[];
+  transient_messages?: Pick<Message, 'role' | 'content'>[];
   model?: string;
 }
 

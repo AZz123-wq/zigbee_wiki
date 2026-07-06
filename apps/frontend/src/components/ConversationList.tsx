@@ -13,6 +13,7 @@ export default function ConversationList() {
   const navigate = useNavigate();
   const location = useLocation();
   const {
+    currentUserRole,
     conversations,
     activeConversationId,
     setActiveConversation,
@@ -31,11 +32,19 @@ export default function ConversationList() {
   const [renameValue, setRenameValue] = useState('');
   const [loadingConvId, setLoadingConvId] = useState<string | null>(null);
   const pendingRequestRef = useRef(0);
+  const isAdmin = currentUserRole === 'admin';
 
   const handleSelect = async (id: string) => {
     if (id === activeConversationId) {
       // If already active, just navigate to chat if not there
       if (location.pathname !== '/') navigate('/');
+      return;
+    }
+
+    if (!isAdmin) {
+      if (location.pathname !== '/') navigate('/');
+      setActiveConversation(id);
+      setMessages([]);
       return;
     }
 
@@ -71,13 +80,20 @@ export default function ConversationList() {
   const handleContextMenu = useCallback(
     (e: React.MouseEvent, convId: string) => {
       e.preventDefault();
+      if (!isAdmin) return;
       setContextMenu({ x: e.clientX, y: e.clientY, convId });
     },
-    []
+    [isAdmin]
   );
 
   const handleDelete = async (convId: string) => {
     setContextMenu(null);
+    if (!isAdmin) {
+      removeConversation(convId);
+      if (convId === activeConversationId) setMessages([]);
+      return;
+    }
+
     try {
       await deleteConversation(convId);
       removeConversation(convId);
@@ -113,6 +129,13 @@ export default function ConversationList() {
       setRenamingId(null);
       return;
     }
+    if (!isAdmin) {
+      updateStoreConv(convId, { title: renameValue });
+      setRenamingId(null);
+      setRenameValue('');
+      return;
+    }
+
     try {
       await updateConversation(convId, { title: renameValue });
       updateStoreConv(convId, { title: renameValue });

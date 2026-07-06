@@ -20,7 +20,8 @@ export default function RawFilesPage() {
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [selectedPdf, setSelectedPdf] = useState<any>(null);
   const [search, setSearch] = useState('');
-  const { setSelectedRawFiles, setSelectedPdfPages, selectedRawFiles } = useStore();
+  const { currentUserRole, setSelectedRawFiles, setSelectedPdfPages, selectedRawFiles } = useStore();
+  const canUpload = currentUserRole === 'admin';
 
   useEffect(() => {
     loadFiles();
@@ -41,16 +42,19 @@ export default function RawFilesPage() {
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    if (!canUpload) return;
     const files = Array.from(e.dataTransfer.files);
     await uploadFiles(files);
-  }, []);
+  }, [canUpload]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canUpload) return;
     const files = Array.from(e.target.files || []);
     await uploadFiles(files);
   };
 
   const uploadFiles = async (files: File[]) => {
+    if (!canUpload || files.length === 0) return;
     setUploading(true);
     setUploadErrors([]);
     setUploadProgress({ current: 0, total: files.length });
@@ -129,13 +133,15 @@ export default function RawFilesPage() {
             <h2 className="text-sm font-semibold">Raw 文件</h2>
             <p className="text-xs text-gray-500">{rawFiles.length} 个文件, {pdfFiles.length} 个 PDF</p>
           </div>
-          <label className={`cursor-pointer px-3 py-1.5 rounded-lg text-white text-xs transition-colors flex items-center gap-1.5 ${
-            uploading ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'
-          }`}>
-            {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
-            {uploading ? `上传中 (${uploadProgress.current}/${uploadProgress.total})` : '上传'}
-            <input type="file" multiple onChange={handleFileSelect} className="hidden" disabled={uploading} />
-          </label>
+          {canUpload && (
+            <label className={`cursor-pointer px-3 py-1.5 rounded-lg text-white text-xs transition-colors flex items-center gap-1.5 ${
+              uploading ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500'
+            }`}>
+              {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+              {uploading ? `上传中 (${uploadProgress.current}/${uploadProgress.total})` : '上传'}
+              <input type="file" multiple onChange={handleFileSelect} className="hidden" disabled={uploading} />
+            </label>
+          )}
         </div>
 
         {/* Upload errors */}
@@ -161,20 +167,22 @@ export default function RawFilesPage() {
         </div>
 
         {/* Drop zone */}
-        <div
-          className={`flex-shrink-0 mx-4 my-2 border-2 border-dashed rounded-lg p-3 text-center transition-colors ${
-            isDragOver
-              ? 'border-blue-500 bg-blue-900/10'
-              : 'border-gray-700 hover:border-gray-600'
-          }`}
-          onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-          onDragLeave={() => setIsDragOver(false)}
-          onDrop={handleDrop}
-        >
-          <p className="text-xs text-gray-500">
-            {isDragOver ? '释放文件以上传' : '拖放文件到此处上传'}
-          </p>
-        </div>
+        {canUpload && (
+          <div
+            className={`flex-shrink-0 mx-4 my-2 border-2 border-dashed rounded-lg p-3 text-center transition-colors ${
+              isDragOver
+                ? 'border-blue-500 bg-blue-900/10'
+                : 'border-gray-700 hover:border-gray-600'
+            }`}
+            onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
+            onDragLeave={() => setIsDragOver(false)}
+            onDrop={handleDrop}
+          >
+            <p className="text-xs text-gray-500">
+              {isDragOver ? '释放文件以上传' : '拖放文件到此处上传'}
+            </p>
+          </div>
+        )}
 
         {/* File list */}
         <div className="flex-1 overflow-y-auto px-2">

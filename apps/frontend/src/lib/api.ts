@@ -2,6 +2,7 @@
  * src/lib/api.ts
  * API client for Wiki Chat Workbench backend
  */
+import type { AuthRole, AuthStatus } from './types';
 
 const BASE = '/api';
 
@@ -54,11 +55,16 @@ async function request<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 // Auth
-export const getAuthStatus = () => request<{ authenticated: boolean }>('/auth/status');
+export const getAuthStatus = () => request<AuthStatus>('/auth/status');
 export const login = (password: string) =>
-  request<{ authenticated: boolean }>('/auth/login', {
+  request<AuthStatus>('/auth/login', {
     method: 'POST',
     body: JSON.stringify({ password }),
+  });
+export const registerAccess = (apiKey: string) =>
+  request<{ password: string; role?: AuthRole }>('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({ apiKey }),
   });
 export const logout = () =>
   request<{ authenticated: boolean }>('/auth/logout', { method: 'POST' });

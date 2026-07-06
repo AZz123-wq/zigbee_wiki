@@ -3,9 +3,13 @@
  * Zustand store for app state management
  */
 import { create } from 'zustand';
-import type { Conversation, Message, CheckResult } from './types';
+import type { AuthRole, Conversation, Message, CheckResult } from './types';
 
 interface AppState {
+  // Auth
+  currentUserRole: AuthRole | null;
+  setCurrentUserRole: (role: AuthRole | null) => void;
+
   // Sidebar
   sidebarOpen: boolean;
   toggleSidebar: () => void;
@@ -23,6 +27,7 @@ interface AppState {
   setConversations: (convs: Conversation[]) => void;
   setActiveConversation: (id: string | null) => void;
   addConversation: (conv: Conversation) => void;
+  startTransientConversation: (title?: string) => Conversation;
   removeConversation: (id: string) => void;
   updateConversation: (id: string, updates: Partial<Conversation>) => void;
 
@@ -50,6 +55,9 @@ interface AppState {
 }
 
 export const useStore = create<AppState>((set) => ({
+  currentUserRole: null,
+  setCurrentUserRole: (role) => set({ currentUserRole: role }),
+
   sidebarOpen: true,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 
@@ -66,6 +74,29 @@ export const useStore = create<AppState>((set) => ({
   setActiveConversation: (id) => set({ activeConversationId: id }),
   addConversation: (conv) =>
     set((s) => ({ conversations: [conv, ...s.conversations], activeConversationId: conv.id })),
+  startTransientConversation: (title = 'New Chat') => {
+    const now = new Date().toISOString();
+    const id = `transient-${crypto.randomUUID?.() || Date.now()}`;
+    const conv: Conversation = {
+      id,
+      title,
+      created_at: now,
+      updated_at: now,
+      status: 'active',
+      message_count: 0,
+      has_raw: false,
+      has_pdf: false,
+      has_wiki_update: false,
+      archived: false,
+      related_raw_files: [],
+      related_wiki_pages: [],
+      related_pdf_pages: [],
+      last_summary: '',
+      transient: true,
+    };
+    set({ conversations: [conv], activeConversationId: conv.id, messages: [] });
+    return conv;
+  },
   removeConversation: (id) =>
     set((s) => ({
       conversations: s.conversations.filter((c) => c.id !== id),

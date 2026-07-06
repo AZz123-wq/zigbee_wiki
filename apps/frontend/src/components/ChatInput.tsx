@@ -17,6 +17,8 @@ export default function ChatInput() {
   const abortRef = useRef<AbortController | null>(null);
 
   const {
+    currentUserRole,
+    messages,
     activeConversationId,
     selectedWikiPages,
     selectedRawFiles,
@@ -24,6 +26,7 @@ export default function ChatInput() {
     addMessage,
     addConversation,
     setActiveConversation,
+    startTransientConversation,
     setLoading,
     updateConversation,
     clearContext,
@@ -40,12 +43,18 @@ export default function ChatInput() {
 
   const handleSend = async () => {
     const text = input.trim();
-    if (!text && uploadedFiles.length === 0) return;
+    const isAdmin = currentUserRole === 'admin';
+    if (!isAdmin && uploadedFiles.length > 0) {
+      setUploadedFiles([]);
+      setUploadedFileIds([]);
+    }
+    if (!text && (isAdmin ? uploadedFiles.length === 0 : true)) return;
     const messageText = text || '上传了文件';
+    const priorMessages = messages;
 
     // Upload files first if any
-    let rawFileIds: string[] = [...uploadedFileIds];
-    if (uploadedFiles.length > 0 && uploadedFileIds.length < uploadedFiles.length) {
+    let rawFileIds: string[] = isAdmin ? [...uploadedFileIds] : [];
+    if (isAdmin && uploadedFiles.length > 0 && uploadedFileIds.length < uploadedFiles.length) {
       setUploading(true);
       const newIds: string[] = [];
       for (const file of uploadedFiles) {
@@ -67,6 +76,10 @@ export default function ChatInput() {
 
     setLoading(true);
     let currentConversationId = activeConversationId || '';
+    if (!isAdmin && !currentConversationId) {
+      const conv = startTransientConversation(messageText.slice(0, 50) || 'New Chat');
+      currentConversationId = conv.id;
+    }
     const userMsg = {
       id: `temp-${Date.now()}`,
       conversation_id: currentConversationId,
@@ -93,11 +106,19 @@ export default function ChatInput() {
     try {
       await sendChatStream(
         {
-          conversation_id: activeConversationId,
+          conversation_id: currentConversationId || activeConversationId,
           message: messageText,
           wiki_pages: selectedWikiPages,
           raw_files: [...selectedRawFiles, ...rawFileIds],
           pdf_pages: selectedPdfPages,
+          transient_messages: isAdmin
+            ? undefined
+            : priorMessages
+                .filter((m) =>
+                  (m.role === 'user' || m.role === 'assistant') &&
+                  m.content.trim()
+                )
+                .map((m) => ({ role: m.role, content: m.content })),
         },
         (token) => {
           const nextContent = (current: string) =>
@@ -129,6 +150,7 @@ export default function ChatInput() {
                 .getState()
                 .conversations.some((c) => c.id === payload.conversation.id);
               if (!exists) addConversation(payload.conversation);
+              else updateConversation(payload.conversation.id, payload.conversation);
             } else if (currentConversationId) {
               setActiveConversation(currentConversationId);
             }
@@ -195,7 +217,7 @@ export default function ChatInput() {
       useStore.setState((s) => ({
         messages: s.messages.map((m) =>
           m.id === assistantMsgId || m.id === finalAssistantMsgId
-            ? { ...m, role: 'system' as const, content: `错误: ${err.message}。请确认后端服务器已启动且 DEEPSEEK_API_KEY 已配置。` }
+            ? { ...m, role: 'system' as const, content: `错误: ${err.message}。请确认后端服务器已启动且当前账户的 DeepSeek API Key 可用。` }
             : m
         ),
       }));
@@ -221,6 +243,7 @@ export default function ChatInput() {
   };
 
   const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (currentUserRole !== 'admin') return;
     const files = Array.from(e.target.files || []);
     setUploadedFiles((prev) => [...prev, ...files]);
   };
@@ -228,15 +251,17 @@ export default function ChatInput() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
+    if (currentUserRole !== 'admin') return;
     const files = Array.from(e.dataTransfer.files);
     setUploadedFiles((prev) => [...prev, ...files]);
-  }, []);
+  }, [currentUserRole]);
 
   const removeFile = (index: number) => {
     setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
   const hasContext = selectedWikiPages.length > 0 || selectedRawFiles.length > 0 || selectedPdfPages.length > 0;
+  const canUpload = currentUserRole === 'admin';
 
   return (
     <div className="chat-input-area bg-gray-950">
@@ -285,7 +310,7 @@ export default function ChatInput() {
         className={`p-4 ${isDragOver ? 'bg-blue-900/10' : ''}`}
         onDragOver={(e) => {
           e.preventDefault();
-          setIsDragOver(true);
+          if (canUpload) setIsDragOver(true);
         }}
         onDragLeave={() => setIsDragOver(false)}
         onDrop={handleDrop}
@@ -320,9 +345,9 @@ export default function ChatInput() {
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                disabled={loading}
+                disabled={loading || !canUpload}
                 className="p-1.5 rounded-lg text-gray-400 hover:text-gray-200 hover:bg-gray-700 disabled:opacity-30 transition-colors"
-                title="上传文件"
+                title={canUpload ? '上传文件' : '普通用户不能上传文件'}
               >
                 <Upload size={16} />
               </button>
@@ -337,7 +362,7 @@ export default function ChatInput() {
               ) : (
                 <button
                   onClick={handleSend}
-                  disabled={(!input.trim() && uploadedFiles.length === 0) || uploading}
+                  disabled={(!input.trim() && (canUpload ? uploadedFiles.length === 0 : true)) || uploading}
                   className="p-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                   title="发送消息"
                 >
@@ -348,7 +373,7 @@ export default function ChatInput() {
           </div>
 
           <p className="text-[10px] text-gray-600 text-center mt-1">
-            Wiki Chat Workbench — 回答基于本地 Wiki 知识库。可拖放上传文件。
+            Wiki Chat Workbench — 回答基于本地 Wiki 知识库。{canUpload ? '可拖放上传文件。' : '当前账户不保存聊天历史。'}
           </p>
         </div>
       </div>

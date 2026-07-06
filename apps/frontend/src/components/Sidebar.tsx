@@ -24,9 +24,16 @@ interface Props {
 export default function Sidebar({ onLogout }: Props) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { toggleSidebar, setMessages } = useStore();
+  const { currentUserRole, toggleSidebar, setMessages, startTransientConversation } = useStore();
+  const isAdmin = currentUserRole === 'admin';
 
   const handleNewChat = async () => {
+    if (!isAdmin) {
+      startTransientConversation();
+      navigate('/');
+      return;
+    }
+
     try {
       const conv = await createConversation();
       useStore.getState().addConversation(conv);
@@ -39,9 +46,11 @@ export default function Sidebar({ onLogout }: Props) {
 
   const navItems = [
     { icon: FileText, label: 'Raw 文件', path: '/raw' },
-    { icon: Database, label: '检索记录', path: '/retrieval' },
-    { icon: ClipboardCheck, label: '审查队列', path: '/review' },
-    { icon: ShieldCheck, label: '检查 Wiki', path: '/check' },
+    ...(isAdmin ? [
+      { icon: Database, label: '检索记录', path: '/retrieval' },
+      { icon: ClipboardCheck, label: '审查队列', path: '/review' },
+      { icon: ShieldCheck, label: '检查 Wiki', path: '/check' },
+    ] : []),
   ];
 
   return (

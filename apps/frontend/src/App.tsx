@@ -23,9 +23,10 @@ import SettingsPage from './pages/SettingsPage';
 import RetrievalPage from './pages/RetrievalPage';
 import LoginPage from './pages/LoginPage';
 import { Loader2 } from 'lucide-react';
+import type { AuthRole } from './lib/types';
 
 export default function App() {
-  const { setConversations, setActiveConversation, setMessages, sidebarOpen } = useStore();
+  const { setConversations, setActiveConversation, setMessages, setCurrentUserRole, sidebarOpen } = useStore();
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
 
@@ -40,7 +41,15 @@ export default function App() {
     });
   }, []);
 
-  const loadInitialData = useCallback(async () => {
+  const loadInitialData = useCallback(async (role: AuthRole | undefined) => {
+    if (role !== 'admin') {
+      setConversations([]);
+      setActiveConversation(null);
+      setMessages([]);
+      getIndexSummary().catch(() => {});
+      return;
+    }
+
     const convs = await getConversations();
     setConversations(convs);
     if (convs.length > 0) {
@@ -62,11 +71,12 @@ export default function App() {
   useEffect(() => {
     setUnauthorizedHandler(() => {
       setAuthenticated(false);
+      setCurrentUserRole(null);
       clearWorkspaceState();
     });
 
     return () => setUnauthorizedHandler(null);
-  }, [clearWorkspaceState]);
+  }, [clearWorkspaceState, setCurrentUserRole]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,12 +85,16 @@ export default function App() {
       .then(async (status) => {
         if (cancelled) return;
         setAuthenticated(status.authenticated);
+        setCurrentUserRole(status.authenticated ? status.role || null : null);
         if (status.authenticated) {
-          await loadInitialData();
+          await loadInitialData(status.role);
         }
       })
       .catch(() => {
-        if (!cancelled) setAuthenticated(false);
+        if (!cancelled) {
+          setAuthenticated(false);
+          setCurrentUserRole(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setCheckingAuth(false);
@@ -88,7 +102,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [loadInitialData]);
+  }, [loadInitialData, setCurrentUserRole]);
 
   const handleLogin = async (password: string) => {
     const result = await login(password);
@@ -96,12 +110,14 @@ export default function App() {
       throw new Error('访问口令不正确');
     }
     setAuthenticated(true);
-    await loadInitialData();
+    setCurrentUserRole(result.role || null);
+    await loadInitialData(result.role);
   };
 
   const handleLogout = async () => {
     await logout().catch(() => {});
     setAuthenticated(false);
+    setCurrentUserRole(null);
     clearWorkspaceState();
   };
 
