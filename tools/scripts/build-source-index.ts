@@ -291,11 +291,25 @@ function readPdfPage(filePath: string, page: number): { text: string; error?: st
   }
 
   try {
-    const text = run('python3', ['/root/pdf_extract.py', filePath, String(page), String(page)], 30000);
+    const text = run('python3', ['/root/pdf_extract.py', filePath, String(page), String(page)], 300000);
     return { text: text.slice(0, MAX_PAGE_TEXT_CHARS) };
   } catch (err: any) {
     return { text: '', error: `pdf_extract.py failed: ${String(err.message || err).slice(0, 160)}` };
   }
+}
+
+function readPdfAllPages(filePath: string, pageCount: number): { text: string; error?: string }[] {
+  try {
+    const raw = run('python3', ['/root/pdf_extract.py', 'json', filePath], 300000);
+    const pages = JSON.parse(raw);
+    if (Array.isArray(pages)) {
+      return Array.from({ length: pageCount }, (_, index) => ({
+        text: String(pages[index] || '').slice(0, MAX_PAGE_TEXT_CHARS),
+      }));
+    }
+  } catch {}
+
+  return Array.from({ length: pageCount }, (_, index) => readPdfPage(filePath, index + 1));
 }
 
 function normalizeText(text: string): string {
@@ -483,9 +497,10 @@ function buildPdfPageEntries(pdf: PdfInfoEntry): PageIndexEntry[] {
   const filePath = path.join(RAW_DIR, pdf.path);
   const entries: PageIndexEntry[] = [];
   if (!pdf.pages || !pdf.extractable) return entries;
+  const pageTexts = readPdfAllPages(filePath, pdf.pages);
 
   for (let page = 1; page <= pdf.pages; page++) {
-    const { text, error } = readPdfPage(filePath, page);
+    const { text, error } = pageTexts[page - 1] || { text: '', error: 'page text missing' };
     const normalized = normalizeText(text);
     const textHash = hashText(`${pdf.sha256}:${page}:${normalized}`);
     entries.push({
